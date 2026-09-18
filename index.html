@@ -134,6 +134,11 @@
   .badge-rest { background: #eef0f3; color: var(--muted); }
   .rest-line { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 7px 0; border-top: 1px solid var(--border); }
   .rest-line:first-of-type { border-top: none; }
+  table.standings { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
+  table.standings th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
+  table.standings td { padding: 7px 8px 7px 0; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.standings td.num, table.standings th.num { text-align: right; }
+  table.standings td.pts { font-weight: 700; }
   .err { font-size: 12px; color: #b42318; margin: 6px 0 0; }
   @media (max-width: 900px) {
     .main { grid-template-columns: 1fr; }
@@ -216,7 +221,7 @@
           <p class="math-note" id="method-note"></p>
         </div>
         <div id="bye-body"></div>
-        <div class="placeholder" id="standings-placeholder">Rest schedule + standings render here (Steps 7–8).</div>
+        <div id="standings-body"></div>
       </section>
       <section class="card panel" aria-label="Explainer">
         <h2>Why this bracket?</h2>
@@ -250,7 +255,8 @@
     byeMethod: 'random',
     seed: 7,
     manualPicks: [],
-    results: {}
+    results: {},
+    rrResults: {}
   };
 
   var rangeEl = document.getElementById('player-count-range');
@@ -281,7 +287,7 @@
       input.setAttribute('aria-label', 'Player ' + (i + 1) + ' name');
       input.addEventListener('input', function () {
         state.names[i] = input.value;
-        state.results = {};
+        state.results = {}; state.rrResults = {};
         refreshOutputs();
       });
       chipsEl.appendChild(input);
@@ -293,7 +299,7 @@
     numberEl.value = String(state.n);
   }
 
-  /* ---------- Shared bracket math (mirrors production RPC + PDF §34) ---------- */
+  /* ---------- Shared bracket math (mirrors production RPC + sports-app.txt section 34) ---------- */
 
   // Smallest power of two >= n. n = 1 is a special case: champion by default.
   function bracketSize(n) {
@@ -455,7 +461,7 @@
     return { byes: byes, realMatches: realMatches, rounds: rounds, byeSlots: byeSlots, vR1: vR1 };
   }
 
-  /* ---------- Round-robin scheduler (circle method, PDF §§40-42) ---------- */
+  /* ---------- Round-robin scheduler (circle method, sports-app.txt sections 40-42) ---------- */
   // Fix the first player, rotate the rest each round. Odd counts get an
   // invisible dummy — whoever meets the dummy RESTS (never a bye).
   function generateRoundRobin(names) {
@@ -500,14 +506,19 @@
       return;
     }
     var t = generateRoundRobin(state.names);
-    var html = '<p class="sim-hint">Circle method: first player fixed, the rest rotate each round. Results + standings arrive in Step 8.</p>';
+    var R = state.rrResults;
+    var decidedFor = function (m) {
+      return (R[m.id] === m.p1 || R[m.id] === m.p2) ? R[m.id] : null;
+    };
+    var html = '<p class="sim-hint">Click a name to decide that match — the standings update live. Click the winner again to undo.</p>';
     html += '<div class="bracket">';
     t.rounds.forEach(function (round) {
       html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
       round.matches.forEach(function (m) {
-        html += '<div class="match"><div class="match-id">' + m.id + '</div>';
-        html += '<div class="slot"><span>' + escapeHtml(m.p1) + '</span></div>';
-        html += '<div class="slot"><span>' + escapeHtml(m.p2) + '</span></div>';
+        var decided = decidedFor(m);
+        html += '<div class="match' + (decided ? ' decided' : '') + '"><div class="match-id">' + m.id + '</div>';
+        html += slotHtml(m.p1, false, m.id, decided, true);
+        html += slotHtml(m.p2, false, m.id, decided, true);
         html += '</div>';
       });
       var rest = t.rests.filter(function (x) { return x.round === round.roundNo; })[0];
@@ -556,7 +567,7 @@
           var at = state.manualPicks.indexOf(i);
           if (box.checked && at === -1) state.manualPicks.push(i);
           if (!box.checked && at !== -1) state.manualPicks.splice(at, 1);
-          state.results = {};
+          state.results = {}; state.rrResults = {};
           refreshOutputs();
         });
         label.appendChild(box);
@@ -607,31 +618,76 @@
     byeBodyEl.innerHTML = html;
   }
 
+  // Standings per sports-app.txt section 42: Player / Played / Wins /
+  // Losses / Points. Win = 3 points (reference example: 4-4-0-12).
+  // Tie-break: head-to-head, then point difference — configurable in the
+  // real engine; noted under the table.
+  var standingsBodyEl = document.getElementById('standings-body');
+
+  function computeStandings(names, results, schedule) {
+    var st = {};
+    names.forEach(function (nm) { st[nm] = { name: nm, played: 0, wins: 0, losses: 0, points: 0 }; });
+    schedule.rounds.forEach(function (rd) {
+      rd.matches.forEach(function (m) {
+        var w = results[m.id];
+        if (!w || (w !== m.p1 && w !== m.p2)) return;
+        var loser = (w === m.p1) ? m.p2 : m.p1;
+        if (!st[w] || !st[loser]) return;
+        st[w].played++; st[w].wins++; st[w].points += 3;
+        st[loser].played++; st[loser].losses++;
+      });
+    });
+    return names.map(function (nm) { return st[nm]; }).sort(function (a, b) {
+      if (b.points !== a.points) return b.points - a.points;
+      if (b.wins !== a.wins) return b.wins - a.wins;
+      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+    });
+  }
+
+  function renderStandings() {
+    if (state.mode !== 'roundrobin') {
+      standingsBodyEl.innerHTML = '<p class="bye-line">Standings appear in Round Robin mode.</p>';
+      return;
+    }
+    if (state.n <= 1) { standingsBodyEl.innerHTML = ''; return; }
+    var rows = computeStandings(state.names, state.rrResults, generateRoundRobin(state.names));
+    var html = '<p class="bye-line">Standings — win = 3 pts</p>';
+    html += '<table class="standings"><thead><tr><th>Player</th><th class="num">Played</th><th class="num">Wins</th><th class="num">Losses</th><th class="num">Points</th></tr></thead><tbody>';
+    rows.forEach(function (r) {
+      html += '<tr><td>' + escapeHtml(r.name) + '</td><td class="num">' + r.played + '</td><td class="num">' + r.wins +
+        '</td><td class="num">' + r.losses + '</td><td class="num pts">' + r.points + '</td></tr>';
+    });
+    html += '</tbody></table>';
+    html += '<p class="bye-line">Tie-break: head-to-head, then point difference (configurable).</p>';
+    standingsBodyEl.innerHTML = html;
+  }
+
   function refreshOutputs() {
     renderBracket();
     renderFairness();
     renderByeSheet();
+    renderStandings();
   }
 
   methodsEl.addEventListener('click', function (event) {
     var btn = event.target.closest('.seg-btn');
     if (!btn) return;
     state.byeMethod = btn.getAttribute('data-m');
-    state.results = {};
+    state.results = {}; state.rrResults = {};
     refreshOutputs();
   });
 
   seedInputEl.addEventListener('change', function () {
     var v = parseInt(seedInputEl.value, 10);
     state.seed = isNaN(v) ? DEMO_SEED : v;
-    state.results = {};
+    state.results = {}; state.rrResults = {};
     refreshOutputs();
   });
 
   document.getElementById('reshuffle').addEventListener('click', function () {
     state.seed = Math.floor(Math.random() * 100000);
     seedInputEl.value = String(state.seed);
-    state.results = {};
+    state.results = {}; state.rrResults = {};
     refreshOutputs();
   });
 
@@ -717,7 +773,7 @@
     narrationEl.className = 'narration';
     narrationEl.innerHTML = html + '<br /><button type="button" id="sim-reset">Reset simulation</button>';
     document.getElementById('sim-reset').addEventListener('click', function () {
-      state.results = {};
+      state.results = {}; state.rrResults = {};
       renderBracket();
       narrate('Simulation reset. Click any player name in a playable match to decide it.');
     });
@@ -733,6 +789,22 @@
     if (!btn || btn.classList.contains('slot-loser')) return;
     var mid = btn.getAttribute('data-mid');
     var name = btn.getAttribute('data-name');
+    if (mid.indexOf('RR') === 0) {
+      if (state.rrResults[mid] === name) {
+        delete state.rrResults[mid];
+        renderBracket(); renderStandings();
+        narrate('<p>' + escapeHtml(name) + ' undecided in ' + mid + ' — standings updated.</p>');
+        return;
+      }
+      state.rrResults[mid] = name;
+      renderBracket(); renderStandings();
+      var sched = generateRoundRobin(state.names);
+      var found = null;
+      sched.rounds.forEach(function (rd) { rd.matches.forEach(function (mm) { if (mm.id === mid) found = mm; }); });
+      var opp = found ? (name === found.p1 ? found.p2 : found.p1) : null;
+      narrate('<p><strong>' + escapeHtml(name) + '</strong> beat ' + escapeHtml(opp || 'TBD') + ' in ' + mid + ' (+3 pts) — standings updated.</p>');
+      return;
+    }
     if (state.results[mid] === name) {
       delete state.results[mid];
       renderBracket();
@@ -861,7 +933,7 @@
     state.n = clampCount(n);
     resizeNames(state.n);
     state.manualPicks = [];
-    state.results = {};
+    state.results = {}; state.rrResults = {};
     renderCount();
     renderChips();
     refreshOutputs();
@@ -874,7 +946,7 @@
     var card = event.target.closest('.mode-card');
     if (!card) return;
     state.mode = card.getAttribute('data-mode');
-    state.results = {};
+    state.results = {}; state.rrResults = {};
     modeCardsEl.querySelectorAll('.mode-card').forEach(function (el) {
       el.classList.toggle('active', el === card);
     });
