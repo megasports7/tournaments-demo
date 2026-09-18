@@ -131,6 +131,9 @@
   .narration { font-size: 13px; }
   .narration p { margin: 0 0 8px; }
   .narration button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .badge-rest { background: #eef0f3; color: var(--muted); }
+  .rest-line { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 7px 0; border-top: 1px solid var(--border); }
+  .rest-line:first-of-type { border-top: none; }
   .err { font-size: 12px; color: #b42318; margin: 6px 0 0; }
   @media (max-width: 900px) {
     .main { grid-template-columns: 1fr; }
@@ -452,6 +455,56 @@
     return { byes: byes, realMatches: realMatches, rounds: rounds, byeSlots: byeSlots, vR1: vR1 };
   }
 
+  /* ---------- Round-robin scheduler (circle method, PDF §§40-42) ---------- */
+  // Fix the first player, rotate the rest each round. Odd counts get an
+  // invisible dummy — whoever meets the dummy RESTS (never a bye).
+  function generateRoundRobin(names) {
+    var n = names.length;
+    var list = names.slice();
+    if (n % 2 === 1) list.push(null);
+    var m = list.length;
+    var rounds = [];
+    var rests = [];
+    for (var r = 0; r < m - 1; r++) {
+      var matches = [];
+      var mNo = 0;
+      for (var i = 0; i < m / 2; i++) {
+        var a = list[i], b = list[m - 1 - i];
+        if (a === null) rests.push({ round: r + 1, player: b });
+        else if (b === null) rests.push({ round: r + 1, player: a });
+        else { mNo++; matches.push({ id: 'RR' + (r + 1) + 'M' + mNo, round: r + 1, matchNo: mNo, p1: a, p2: b }); }
+      }
+      rounds.push({ roundNo: r + 1, matches: matches });
+      list = [list[0]].concat([list[m - 1]], list.slice(1, m - 1));
+    }
+    return { rounds: rounds, rests: rests };
+  }
+
+  function renderRoundRobin() {
+    var n = state.n;
+    if (n <= 1) {
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — no opponents, no matches.</div>';
+      return;
+    }
+    var t = generateRoundRobin(state.names);
+    var html = '<p class="sim-hint">Circle method: first player fixed, the rest rotate each round. Results + standings arrive in Step 8.</p>';
+    html += '<div class="bracket">';
+    t.rounds.forEach(function (round) {
+      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      round.matches.forEach(function (m) {
+        html += '<div class="match"><div class="match-id">' + m.id + '</div>';
+        html += '<div class="slot"><span>' + escapeHtml(m.p1) + '</span></div>';
+        html += '<div class="slot"><span>' + escapeHtml(m.p2) + '</span></div>';
+        html += '</div>';
+      });
+      var rest = t.rests.filter(function (x) { return x.round === round.roundNo; })[0];
+      if (rest) html += '<div class="match"><div class="slot"><span>' + escapeHtml(rest.player) + '</span> <span class="badge badge-rest">REST</span></div></div>';
+      html += '</div>';
+    });
+    html += '</div>';
+    bracketBodyEl.innerHTML = html;
+  }
+
   var byeBodyEl = document.getElementById('bye-body');
   var fairnessEl = document.getElementById('fairness-controls');
   var methodNoteEl = document.getElementById('method-note');
@@ -503,6 +556,18 @@
   }
 
   function renderByeSheet() {
+    if (state.mode === 'roundrobin') {
+      if (state.n <= 1) { byeBodyEl.innerHTML = ''; return; }
+      var t = generateRoundRobin(state.names);
+      if (!t.rests.length) { byeBodyEl.innerHTML = '<p class="bye-line">Even field — every round is full, no rests.</p>'; return; }
+      var html = '<p class="bye-line">Rest schedule — scheduled breaks, not knockout byes. Each player rests exactly once.</p>';
+      t.rests.forEach(function (row) {
+        html += '<div class="rest-line"><span class="bye-pos">Round ' + row.round + '</span>' +
+          '<span>' + escapeHtml(row.player) + ' <span class="badge badge-rest">REST</span></span></div>';
+      });
+      byeBodyEl.innerHTML = html;
+      return;
+    }
     if (state.mode !== 'single' && state.mode !== 'double') {
       byeBodyEl.innerHTML = '';
       return;
@@ -684,8 +749,12 @@
   });
 
   function renderBracket() {
+    if (state.mode === 'roundrobin') {
+      renderRoundRobin();
+      return;
+    }
     if (state.mode !== 'single') {
-      bracketBodyEl.innerHTML = '<div class="placeholder">Double-elimination and round-robin rendering arrive in Steps 7–9.</div>';
+      bracketBodyEl.innerHTML = '<div class="placeholder">Double-elimination rendering arrives in Step 9.</div>';
       return;
     }
     var n = state.n;
