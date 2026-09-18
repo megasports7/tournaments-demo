@@ -560,10 +560,11 @@
       if (state.n <= 1) { byeBodyEl.innerHTML = ''; return; }
       var t = generateRoundRobin(state.names);
       if (!t.rests.length) { byeBodyEl.innerHTML = '<p class="bye-line">Even field — every round is full, no rests.</p>'; return; }
-      var html = '<p class="bye-line">Rest schedule — scheduled breaks, not knockout byes. Each player rests exactly once.</p>';
+      var html = '<p class="bye-line">Round Robin Rest Schedule — generated instead of a knockout Bye Sheet. Type: Rest Bye (odd fields only). Each player rests exactly once.</p>';
       t.rests.forEach(function (row) {
         html += '<div class="rest-line"><span class="bye-pos">Round ' + row.round + '</span>' +
-          '<span>' + escapeHtml(row.player) + ' <span class="badge badge-rest">REST</span></span></div>';
+          '<span>' + escapeHtml(row.player) + ' <span class="badge badge-rest">REST</span></span>' +
+          '<span class="bye-next">Rest Bye</span></div>';
       });
       byeBodyEl.innerHTML = html;
       return;
