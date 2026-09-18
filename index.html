@@ -460,8 +460,18 @@
   // invisible dummy — whoever meets the dummy RESTS (never a bye).
   function generateRoundRobin(names) {
     var n = names.length;
-    var list = names.slice();
-    if (n % 2 === 1) list.push(null);
+    // Opening arrangement: even fields keep input order; odd fields use
+    // odds-then-evens-around-dummy so the canonical 5-player draw opens
+    // R1: A-B, C-D, E rests (reference section 41).
+    var list;
+    if (n % 2 === 0) {
+      list = names.slice();
+    } else {
+      var odds = [], evens = [];
+      for (var k = 0; k < n; k++) { (k % 2 === 0 ? odds : evens).push(names[k]); }
+      list = odds.concat([null], evens.reverse());
+    }
+    var m = list.length;
     var m = list.length;
     var rounds = [];
     var rests = [];
@@ -475,7 +485,10 @@
         else { mNo++; matches.push({ id: 'RR' + (r + 1) + 'M' + mNo, round: r + 1, matchNo: mNo, p1: a, p2: b }); }
       }
       rounds.push({ roundNo: r + 1, matches: matches });
-      list = [list[0]].concat([list[m - 1]], list.slice(1, m - 1));
+      // Rotate: keep first fixed, left-rotate the tail by one. With the
+      // opening arrangement above, 5 players continue R2: A-C, B-E, D rests.
+      var tail = list.slice(1);
+      list = [list[0]].concat(tail.slice(1), [tail[0]]);
     }
     return { rounds: rounds, rests: rests };
   }
