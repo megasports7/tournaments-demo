@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Tournament Engine Demo</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --border: #e2e4e9;
+    --text: #1c2333;
+    --muted: #6b7280;
+    --accent: #1f6feb;
+    --accent-soft: #e8f0fe;
+    --bye: #8a6d00;
+    --bye-soft: #fdf3d7;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+  }
+  .controls { margin-bottom: 16px; }
+  .controls h2, .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+  .control-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
+  .control-row:last-child { margin-bottom: 0; }
+  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
+  .field input[type="number"] { width: 90px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  .field input[type="range"] { width: 200px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 12px;
+    font-size: 13px;
+    background: #fafbfc;
+    font-family: inherit;
+    color: var(--text);
+    width: 76px;
+    text-align: center;
+  }
+  input.chip:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+    background: var(--card);
+  }
+  .modes { display: flex; flex-wrap: wrap; gap: 12px; }
+  .mode-card {
+    flex: 1 1 180px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 14px;
+    cursor: pointer;
+    background: var(--card);
+  }
+  .mode-card.active { border-color: var(--accent); background: var(--accent-soft); }
+  .mode-card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+  .mode-card span { font-size: 12px; color: var(--muted); }
+  .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  .preset {
+    border: 1px solid var(--border);
+    background: var(--card);
+    border-radius: 999px;
+    padding: 8px 14px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  .main { display: grid; grid-template-columns: 7fr 5fr; gap: 16px; }
+  .panel h2 { margin-bottom: 12px; }
+  .placeholder {
+    border: 1px dashed var(--border);
+    border-radius: 8px;
+    padding: 24px 16px;
+    color: var(--muted);
+    font-size: 13px;
+    text-align: center;
+    margin-bottom: 12px;
+  }
+  .placeholder:last-child { margin-bottom: 0; }
+  footer { margin-top: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+  .math-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; margin: 0 0 12px; }
+  .math-grid dt { color: var(--muted); }
+  .math-grid dd { margin: 0; font-weight: 600; }
+  .math-note { font-size: 13px; color: var(--text); background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; }
+  .bracket { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
+  .round { min-width: 170px; flex: 1 0 0; }
+  .round h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+  .match { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--card); }
+  .match-id { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
+  .slot { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 0; }
+  .slot.tbd { color: var(--muted); font-style: italic; }
+  .badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.03em; }
+  .badge-bye { background: var(--bye-soft); color: var(--bye); }
+  .bye-line { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  #fairness-controls { margin-bottom: 12px; }
+  #fairness-controls .field { margin-bottom: 10px; }
+  .seg { display: flex; flex-wrap: wrap; gap: 6px; }
+  .seg-btn { border: 1px solid var(--border); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .seg-btn.active { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .seed-row { display: flex; gap: 8px; align-items: center; }
+  .seed-row input { width: 90px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
+  .seed-row button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
+  #manual-picks label { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; }
+  .bye-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 7px 0; border-top: 1px solid var(--border); }
+  .bye-row:first-of-type { border-top: none; }
+  .bye-pos { color: var(--muted); min-width: 74px; }
+  .bye-next { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .match.decided { border-color: var(--accent); }
+  .match.locked { opacity: 0.75; }
+  .slot-btn { display: flex; align-items: center; gap: 6px; width: 100%; font: inherit; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 4px; margin: 0 -4px; cursor: pointer; color: var(--text); }
+  .slot-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
+  .slot-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .slot-winner { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+  .slot-loser { color: var(--muted); cursor: default; }
+  .slot-loser:hover { background: none; border-color: transparent; }
+  .lock-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .sim-hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .narration { font-size: 13px; }
+  .narration p { margin: 0 0 8px; }
+  .narration button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
+  .err { font-size: 12px; color: #b42318; margin: 6px 0 0; }
+  @media (max-width: 900px) {
+    .main { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <header>
+    <h1>Tournament Engine Demo</h1>
+    <p id="mode-explainer">Single elimination: one loss ends the run. Bracket math and byes appear here per mode.</p>
+  </header>
+
+  <section class="card controls" aria-label="Demo controls">
+    <h2>Organizer controls</h2>
+    <div class="control-row">
+      <div class="field">
+        <label for="player-count">Players (1–20)</label>
+        <input type="range" id="player-count-range" min="1" max="20" value="5" />
+        <input type="number" id="player-count" min="1" max="20" value="5" />
+      </div>
+      <div class="field">
+        <label>Player names (click to edit)</label>
+        <div class="chips" id="name-chips"></div>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="modes" id="mode-cards">
+        <div class="mode-card active" data-mode="single">
+          <strong>Single Elimination</strong>
+          <span>One loss ends the run</span>
+        </div>
+        <div class="mode-card" data-mode="double">
+          <strong>Double Elimination</strong>
+          <span>Winners + losers brackets</span>
+        </div>
+        <div class="mode-card" data-mode="roundrobin">
+          <strong>Round Robin</strong>
+          <span>Everyone plays everyone</span>
+        </div>
+      </div>
+    </div>
+    <div class="control-row">
+      <div class="presets" id="presets">
+        <button class="preset" type="button">5 players · Single</button>
+        <button class="preset" type="button">6 players · Single</button>
+        <button class="preset" type="button">5 players · Round Robin</button>
+        <button class="preset" type="button">4 players · Double</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="main">
+    <section class="card panel" aria-label="Bracket">
+      <h2>Bracket / Schedule</h2>
+      <div id="bracket-body"></div>
+    </section>
+    <div>
+      <section class="card panel" style="margin-bottom: 16px;" aria-label="Bye sheet">
+        <h2>Bye Sheet / Rest &amp; Standings</h2>
+        <div id="fairness-controls">
+          <div class="field">
+            <label>Bye method</label>
+            <div class="seg" id="bye-methods">
+              <button type="button" class="seg-btn active" data-m="random">Random</button>
+              <button type="button" class="seg-btn" data-m="balanced">Balanced</button>
+              <button type="button" class="seg-btn" data-m="seed_priority">Seed priority</button>
+              <button type="button" class="seg-btn" data-m="manual">Manual</button>
+            </div>
+          </div>
+          <div class="field">
+            <label for="shuffle-seed">Shuffle seed</label>
+            <div class="seed-row">
+              <input type="number" id="shuffle-seed" value="7" />
+              <button type="button" id="reshuffle">Reshuffle</button>
+            </div>
+          </div>
+          <div id="manual-picks"></div>
+          <p class="math-note" id="method-note"></p>
+        </div>
+        <div id="bye-body"></div>
+        <div class="placeholder" id="standings-placeholder">Rest schedule + standings render here (Steps 7–8).</div>
+      </section>
+      <section class="card panel" aria-label="Explainer">
+        <h2>Why this bracket?</h2>
+        <div id="explainer-body"></div>
+        <div class="placeholder" id="narration-placeholder">Match narration renders here (Step 6).</div>
+      </section>
+    </div>
+  </div>
+
+  <footer id="step-note">Step 2 — inputs wired. Bracket math arrives in Step 3.</footer>
+
+</div>
+<script>
+(function () {
+  'use strict';
+
+  var MIN_PLAYERS = 1;
+  var MAX_PLAYERS = 20;
+
+  var EXPLAINERS = {
+    single: 'Single elimination: one loss ends the run. Bracket math and byes appear here per mode.',
+    double: 'Double elimination: one loss drops you to the losers bracket — two losses eliminate. Opening byes apply to the winners side only.',
+    roundrobin: 'Round robin: everyone plays everyone. Odd counts produce one rest per round — rests are not byes.'
+  };
+
+  // Single source of truth for the demo. In-memory only; resets on reload.
+  var state = {
+    n: 5,
+    names: ['P1', 'P2', 'P3', 'P4', 'P5'],
+    mode: 'single',
+    byeMethod: 'random',
+    seed: 7,
+    manualPicks: [],
+    results: {}
+  };
+
+  var rangeEl = document.getElementById('player-count-range');
+  var numberEl = document.getElementById('player-count');
+  var chipsEl = document.getElementById('name-chips');
+  var explainerEl = document.getElementById('mode-explainer');
+  var modeCardsEl = document.getElementById('mode-cards');
+
+  function clampCount(value) {
+    var n = parseInt(value, 10);
+    if (isNaN(n)) return state.n;
+    return Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, n));
+  }
+
+  // Grow/shrink the names array, preserving already-typed names.
+  function resizeNames(n) {
+    var names = state.names.slice(0, n);
+    for (var i = names.length; i < n; i++) names.push('P' + (i + 1));
+    state.names = names;
+  }
+
+  function renderChips() {
+    chipsEl.innerHTML = '';
+    state.names.forEach(function (name, i) {
+      var input = document.createElement('input');
+      input.className = 'chip';
+      input.value = name;
+      input.setAttribute('aria-label', 'Player ' + (i + 1) + ' name');
+      input.addEventListener('input', function () {
+        state.names[i] = input.value;
+        state.results = {};
+        refreshOutputs();
+      });
+      chipsEl.appendChild(input);
+    });
+  }
+
+  function renderCount() {
+    rangeEl.value = String(state.n);
+    numberEl.value = String(state.n);
+  }
+
+  /* ---------- Shared bracket math (mirrors production RPC + PDF §34) ---------- */
+
+  // Smallest power of two >= n. n = 1 is a special case: champion by default.
+  function bracketSize(n) {
+    if (n <= 1) return 1;
+    var b = 1;
+    while (b < n) b *= 2;
+    return b;
+  }
+
+  function byeCount(n) {
+    if (n <= 1) return 0;
+    return bracketSize(n) - n;
+  }
+
+  function roundCount(n) {
+    if (n <= 1) return 0;
+    return Math.log(bracketSize(n)) / Math.log(2);
+  }
+
+  // Real Round-1 matches: each occupies 2 players, byes occupy one slot each.
+  function realRoundOneMatches(n) {
+    if (n <= 1) return 0;
+    return n - bracketSize(n) / 2;
+  }
+
+  // Full B-bracket has B-1 matches; every bye removes one Round-1 row.
+  function singleElimRows(n) {
+    if (n <= 1) return 0;
+    return bracketSize(n) - 1 - byeCount(n);
+  }
+
+  function roundRobinShape(n) {
+    if (n <= 1) return { rounds: 0, perRound: 0, total: 0, rests: 0 };
+    var odd = n % 2 === 1;
+    return {
+      rounds: odd ? n : n - 1,
+      perRound: Math.floor(n / 2),
+      total: (n * (n - 1)) / 2,
+      rests: odd ? n : 0
+    };
+  }
+
+  function doubleElimShape(n) {
+    if (n <= 1) return { winners: 0, losers: 0 };
+    var b = bracketSize(n);
+    return { winners: singleElimRows(n), losers: Math.max(0, b - 2) };
+  }
+
+  /* ---------- Single-elimination generator (mirrors production RPC loop) ---------- */
+
+  // Fixed demo seed so the same count always draws the same bracket.
+  // (Seed control + reshuffle arrive in Step 5.)
+  var DEMO_SEED = 7;
+
+  // Deterministic PRNG: identical to Math.random's role in the RPC,
+  // but reproducible for presenting.
+  function mulberry32(seed) {
+    var a = seed >>> 0;
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  function shuffled(names, seed) {
+    var rand = mulberry32(seed);
+    var arr = names.slice();
+    for (var i = arr.length - 1; i > 0; i--) {
+      var j = Math.floor(rand() * (i + 1));
+      var tmp = arr[i]; arr[i] = arr[j]; arr[j] = tmp;
+    }
+    return arr;
+  }
+
+  // Returns { byes, realMatches, rounds, byeSlots }.
+  // byeSlots: [{ slot (0-based draw position), name, next }] in draw order.
+  // opts: { method: random|balanced|seed_priority|manual, seed, manualPicks: [nameIndex] }
+  function generateSingleElim(names, opts) {
+    opts = opts || {};
+    var method = opts.method || 'random';
+    var seed = (opts.seed === undefined) ? DEMO_SEED : opts.seed;
+    var n = names.length;
+    var b = bracketSize(n);
+    var byes = byeCount(n);
+    var slots = b / 2;
+    var idx = names.map(function (_, i) { return i; });
+    var pool = shuffled(idx, seed);
+    var notIn = function (arr, take) {
+      return arr.filter(function (x) { return take.indexOf(x) === -1; });
+    };
+    var byeIdx, restIdx;
+    if (method === 'seed_priority') {
+      // Input order is the ranking: chip 1 = top seed.
+      byeIdx = idx.slice(0, byes);
+      restIdx = notIn(pool, byeIdx);
+    } else if (method === 'manual') {
+      byeIdx = (opts.manualPicks || []).filter(function (x) { return x >= 0 && x < n; }).slice(0, byes);
+      restIdx = notIn(pool, byeIdx);
+    } else {
+      byeIdx = pool.slice(0, byes);
+      restIdx = pool.slice(byes);
+    }
+    // Which draw slots hold the byes: front (random/seed/manual) or spread.
+    var byeSlotsIdx = [];
+    if (method === 'balanced') {
+      var seen = {};
+      for (var e = 0; e < slots && byeSlotsIdx.length < byes; e += 2) { byeSlotsIdx.push(e); seen[e] = 1; }
+      for (var o = 1; o < slots && byeSlotsIdx.length < byes; o += 2) { if (!seen[o]) byeSlotsIdx.push(o); }
+      for (var q = 0; q < slots && byeSlotsIdx.length < byes; q++) { if (!seen[q]) byeSlotsIdx.push(q); }
+    } else {
+      for (var s = 0; s < byes; s++) byeSlotsIdx.push(s);
+    }
+    var byeAtSlot = {};
+    byeSlotsIdx.forEach(function (slot, k) { if (byeIdx[k] !== undefined) byeAtSlot[slot] = names[byeIdx[k]]; });
+    // vR1[k]: { bye: name } | { match: ref }
+    var vR1 = [];
+    var realMatches = [];
+    var restPos = 0;
+    for (var i = 0; i < slots; i++) {
+      if (byeAtSlot[i] !== undefined) {
+        vR1.push({ bye: byeAtSlot[i] });
+      } else {
+        var p1 = restIdx[restPos] !== undefined ? names[restIdx[restPos]] : null; restPos++;
+        var p2 = restIdx[restPos] !== undefined ? names[restIdx[restPos]] : null; restPos++;
+        if (p1 && p2) {
+          var m = { id: 'R1M' + (i + 1), round: 1, matchNo: i + 1, p1: p1, p2: p2 };
+          realMatches.push(m);
+          vR1.push({ match: m });
+        } else {
+          vR1.push({ bye: p1 || p2 });
+        }
+      }
+    }
+    var rounds = [];
+    if (realMatches.length) rounds.push({ roundNo: 1, matches: realMatches });
+    function slotName(s) {
+      if (!s) return { name: 'TBD', bye: false };
+      if (s.bye) return { name: s.bye, bye: true };
+      return { name: 'TBD', bye: false };
+    }
+    var prev = vR1;
+    var k = roundCount(n);
+    for (var r = 2; r <= k; r++) {
+      var size = b / Math.pow(2, r);
+      var matches = [];
+      for (var mIdx = 0; mIdx < size; mIdx++) {
+        var s1 = slotName(prev[mIdx * 2]);
+        var s2 = slotName(prev[mIdx * 2 + 1]);
+        matches.push({ id: 'R' + r + 'M' + (mIdx + 1), round: r, matchNo: mIdx + 1, p1: s1.name, p2: s2.name, p1Bye: s1.bye, p2Bye: s2.bye });
+      }
+      rounds.push({ roundNo: r, matches: matches });
+      prev = matches.map(function () { return null; }); // deeper rounds start TBD
+    }
+    var byeSlots = Object.keys(byeAtSlot).map(Number).sort(function (a, c) { return a - c; }).map(function (slot) {
+      return { slot: slot, name: byeAtSlot[slot], next: 'R2M' + (Math.floor(slot / 2) + 1) };
+    });
+    return { byes: byes, realMatches: realMatches, rounds: rounds, byeSlots: byeSlots, vR1: vR1 };
+  }
+
+  var byeBodyEl = document.getElementById('bye-body');
+  var fairnessEl = document.getElementById('fairness-controls');
+  var methodNoteEl = document.getElementById('method-note');
+  var manualPicksEl = document.getElementById('manual-picks');
+  var seedInputEl = document.getElementById('shuffle-seed');
+  var methodsEl = document.getElementById('bye-methods');
+
+  var METHOD_NOTES = {
+    random: 'Production behavior: byes are the first slots of a random shuffle.',
+    balanced: 'Best-effort spread: byes land in different Round-2 matches so bye-winners meet as late as possible.',
+    seed_priority: 'Seeds = player order as listed (chip 1 = top seed). Top seeds take the byes.',
+    manual: 'Tick exactly the required number of names — they walk into Round 2.'
+  };
+
+  function currentOpts() {
+    return { method: state.byeMethod, seed: state.seed, manualPicks: state.manualPicks };
+  }
+
+  function renderFairness() {
+    var show = state.mode === 'single' || state.mode === 'double';
+    fairnessEl.style.display = show ? '' : 'none';
+    if (!show) return;
+    methodsEl.querySelectorAll('.seg-btn').forEach(function (btn) {
+      btn.classList.toggle('active', btn.getAttribute('data-m') === state.byeMethod);
+    });
+    methodNoteEl.textContent = METHOD_NOTES[state.byeMethod];
+    if (state.byeMethod === 'manual') {
+      manualPicksEl.innerHTML = '';
+      state.names.forEach(function (name, i) {
+        var label = document.createElement('label');
+        var box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = state.manualPicks.indexOf(i) !== -1;
+        box.setAttribute('aria-label', 'Give ' + (name || ('P' + (i + 1))) + ' a bye');
+        box.addEventListener('change', function () {
+          var at = state.manualPicks.indexOf(i);
+          if (box.checked && at === -1) state.manualPicks.push(i);
+          if (!box.checked && at !== -1) state.manualPicks.splice(at, 1);
+          state.results = {};
+          refreshOutputs();
+        });
+        label.appendChild(box);
+        label.appendChild(document.createTextNode(name || ('P' + (i + 1))));
+        manualPicksEl.appendChild(label);
+      });
+    } else {
+      manualPicksEl.innerHTML = '';
+    }
+  }
+
+  function renderByeSheet() {
+    if (state.mode !== 'single' && state.mode !== 'double') {
+      byeBodyEl.innerHTML = '';
+      return;
+    }
+    var n = state.n;
+    if (n <= 1 || byeCount(n) === 0) {
+      byeBodyEl.innerHTML = '<p class="bye-line">Clean bracket — no byes.</p>';
+      return;
+    }
+    if (state.byeMethod === 'manual' && state.manualPicks.length !== byeCount(n)) {
+      byeBodyEl.innerHTML = '<p class="err">Select exactly ' + byeCount(n) + ' names (' +
+        state.manualPicks.length + ' ticked).</p>';
+      return;
+    }
+    var t = generateSingleElim(state.names, currentOpts());
+    var title = state.mode === 'double' ? 'Opening byes — winners side only' : 'Knockout byes';
+    var html = '<p class="bye-line">' + title + ' · method: ' + state.byeMethod.replace('_', ' ') + '</p>';
+    t.byeSlots.forEach(function (row) {
+      html += '<div class="bye-row"><span class="bye-pos">Draw ' + (row.slot + 1) + '</span>' +
+        '<span>' + escapeHtml(row.name) + ' <span class="badge badge-bye">BYE</span></span>' +
+        '<span class="bye-next">walks into ' + row.next + '</span></div>';
+    });
+    byeBodyEl.innerHTML = html;
+  }
+
+  function refreshOutputs() {
+    renderBracket();
+    renderFairness();
+    renderByeSheet();
+  }
+
+  methodsEl.addEventListener('click', function (event) {
+    var btn = event.target.closest('.seg-btn');
+    if (!btn) return;
+    state.byeMethod = btn.getAttribute('data-m');
+    state.results = {};
+    refreshOutputs();
+  });
+
+  seedInputEl.addEventListener('change', function () {
+    var v = parseInt(seedInputEl.value, 10);
+    state.seed = isNaN(v) ? DEMO_SEED : v;
+    state.results = {};
+    refreshOutputs();
+  });
+
+  document.getElementById('reshuffle').addEventListener('click', function () {
+    state.seed = Math.floor(Math.random() * 100000);
+    seedInputEl.value = String(state.seed);
+    state.results = {};
+    refreshOutputs();
+  });
+
+  var bracketBodyEl = document.getElementById('bracket-body');
+
+  function escapeHtml(s) {
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Results map: matchId -> winner name. Stale entries (winner no longer a
+  // participant after an upstream change) are dropped at resolve time, which
+  // gives us retract-on-change for free — same effect as the DB's _retract.
+  function slotHtml(name, isBye, matchId, decidedId, playable) {
+    if (name === 'TBD') return '<div class="slot tbd"><span>TBD</span></div>';
+    var badge = isBye ? ' <span class="badge badge-bye">BYE</span>' : '';
+    if (!playable) return '<div class="slot"><span>' + escapeHtml(name) + '</span>' + badge + '</div>';
+    var cls = 'slot-btn' + (decidedId === name ? ' slot-winner' : (decidedId ? ' slot-loser' : ''));
+    var mark = decidedId === name ? ' ✓' : '';
+    return '<button type="button" class="' + cls + '" data-mid="' + matchId + '" data-name="' + escapeHtml(name) + '">' +
+      '<span>' + escapeHtml(name) + mark + '</span>' + badge + '</button>';
+  }
+
+  // Flatten the generated bracket into matches with feeder references,
+  // then resolve participants and winners in round order.
+  function resolveBracket(t) {
+    var R = state.results;
+    var matches = [];
+    var byId = {};
+    t.realMatches.forEach(function (m) {
+      var rec = { id: m.id, round: 1, matchNo: m.matchNo, slots: [{ name: m.p1 }, { name: m.p2 }] };
+      matches.push(rec); byId[rec.id] = rec;
+    });
+    var prevIds = [];
+    // Round 2 feeds from vR1: bye -> fixed name, real match -> feeder id.
+    var r2count = t.rounds.length > 1 ? t.rounds[1].matches.length : 0;
+    for (var j = 0; j < r2count; j++) {
+      var f1 = t.vR1[j * 2], f2 = t.vR1[j * 2 + 1];
+      var rec2 = {
+        id: 'R2M' + (j + 1), round: 2, matchNo: j + 1,
+        slots: [
+          f1 && f1.bye ? { name: f1.bye, bye: true } : { feeder: f1 && f1.match ? f1.match.id : null },
+          f2 && f2.bye ? { name: f2.bye, bye: true } : { feeder: f2 && f2.match ? f2.match.id : null }
+        ]
+      };
+      matches.push(rec2); byId[rec2.id] = rec2; prevIds.push(rec2.id);
+    }
+    // Deeper rounds feed from previous-round matches: (r,m) <- (r-1,2m-1),(r-1,2m).
+    for (var r = 3; r <= t.rounds.length; r++) {
+      var size = t.rounds[r - 1].matches.length;
+      var cur = [];
+      for (var q = 0; q < size; q++) {
+        var recR = {
+          id: 'R' + r + 'M' + (q + 1), round: r, matchNo: q + 1,
+          slots: [{ feeder: 'R' + (r - 1) + 'M' + (q * 2 + 1) }, { feeder: 'R' + (r - 1) + 'M' + (q * 2 + 2) }]
+        };
+        matches.push(recR); byId[recR.id] = recR; cur.push(recR.id);
+      }
+      prevIds = cur;
+    }
+    var winnerOf = function (id) {
+      var rec = byId[id];
+      if (!rec || !rec._winner) return null;
+      return rec._winner;
+    };
+    matches.forEach(function (rec) {
+      rec.slots.forEach(function (slot) {
+        if (slot.name === undefined) slot.name = slot.feeder ? winnerOf(slot.feeder) : null;
+      });
+      var names = rec.slots.map(function (s) { return s.name; });
+      rec.playable = names[0] && names[1] && !names.some(function (x) { return x === null; });
+      rec.decided = (R[rec.id] && names.indexOf(R[rec.id]) !== -1) ? R[rec.id] : null;
+      rec._winner = rec.decided;
+      if (!rec.playable) rec.waitingFor = rec.slots
+        .filter(function (s) { return !s.name && s.feeder; })
+        .map(function (s) { return s.feeder; });
+    });
+    return matches;
+  }
+
+  var narrationEl = document.getElementById('narration-placeholder');
+
+  function narrate(html) {
+    narrationEl.className = 'narration';
+    narrationEl.innerHTML = html + '<br /><button type="button" id="sim-reset">Reset simulation</button>';
+    document.getElementById('sim-reset').addEventListener('click', function () {
+      state.results = {};
+      renderBracket();
+      narrate('Simulation reset. Click any player name in a playable match to decide it.');
+    });
+  }
+
+  function describeTarget(t, round, matchNo) {
+    if (round > t.rounds.length) return null;
+    return 'R' + round + 'M' + matchNo;
+  }
+
+  bracketBodyEl.addEventListener('click', function (event) {
+    var btn = event.target.closest('.slot-btn');
+    if (!btn || btn.classList.contains('slot-loser')) return;
+    var mid = btn.getAttribute('data-mid');
+    var name = btn.getAttribute('data-name');
+    if (state.results[mid] === name) {
+      delete state.results[mid];
+      renderBracket();
+      narrate('<p>' + escapeHtml(name) + ' undecided in ' + mid + ' — downstream results that depended on it were retracted.</p>');
+      return;
+    }
+    state.results[mid] = name;
+    renderBracket();
+    var parts = mid.match(/^R(\d+)M(\d+)$/);
+    var r = parseInt(parts[1], 10), m = parseInt(parts[2], 10);
+    var t = generateSingleElim(state.names, currentOpts());
+    var target = describeTarget(t, r + 1, Math.ceil(m / 2));
+    var msg = '<p><strong>' + escapeHtml(name) + '</strong> won ' + mid;
+    if (!target) {
+      msg += ' — tournament champion.</p>';
+    } else {
+      var resolved = resolveBracket(t);
+      var tgt = resolved.filter(function (x) { return x.id === target; })[0];
+      var opp = tgt.slots.filter(function (s) { return s.name && s.name !== name; })[0];
+      msg += ' → advances to ' + target + (opp ? ' vs ' + escapeHtml(opp.name) + '.' : '.') + '</p>';
+      if (tgt.decided || tgt.playable) {
+        msg += '<p>' + target + ' is now playable.</p>';
+      } else {
+        msg += '<p>' + target + ' still waits for ' + tgt.waitingFor.join(', ') + '.</p>';
+      }
+    }
+    narrate(msg);
+  });
+
+  function renderBracket() {
+    if (state.mode !== 'single') {
+      bracketBodyEl.innerHTML = '<div class="placeholder">Double-elimination and round-robin rendering arrive in Steps 7–9.</div>';
+      return;
+    }
+    var n = state.n;
+    if (n <= 1) {
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — champion by default, no matches.</div>';
+      return;
+    }
+    var t = generateSingleElim(state.names, currentOpts());
+    var resolved = resolveBracket(t);
+    var html = '<p class="sim-hint">Click a player name to decide that match. Click the winner again to undo.</p>';
+    if (t.byes > 0) {
+      html += '<p class="bye-line">' + t.byes + ' bye' + (t.byes > 1 ? 's' : '') +
+        ' walk directly into Round 2 — see the Bye Sheet.</p>';
+    }
+    html += '<div class="bracket">';
+    t.rounds.forEach(function (round) {
+      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      resolved.filter(function (x) { return x.round === round.roundNo; }).forEach(function (rec) {
+        var cls = 'match' + (rec.decided ? ' decided' : (!rec.playable ? ' locked' : ''));
+        html += '<div class="' + cls + '"><div class="match-id">' + rec.id + '</div>';
+        rec.slots.forEach(function (slot) {
+          html += slotHtml(slot.name || 'TBD', !!slot.bye, rec.id, rec.decided, !!rec.playable);
+        });
+        if (!rec.playable && !rec.decided && rec.waitingFor && rec.waitingFor.length) {
+          html += '<div class="lock-note">Waiting for ' + rec.waitingFor.join(', ') + '</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    bracketBodyEl.innerHTML = html;
+  }
+
+  var explainerBodyEl = document.getElementById('explainer-body');
+
+  function row(term, value) {
+    return '<dt>' + term + '</dt><dd>' + value + '</dd>';
+  }
+
+  function renderMath() {
+    var n = state.n;
+    var html = '';
+    if (state.mode === 'roundrobin') {
+      var rr = roundRobinShape(n);
+      html += '<dl class="math-grid">';
+      html += row('Players', n);
+      html += row('Rounds', rr.rounds);
+      html += row('Matches per round', rr.perRound);
+      html += row('Total matches', rr.total);
+      html += row('Rests', rr.rests + (rr.rests ? ' (one per player — not byes)' : ' (even field, no rests)'));
+      html += '</dl>';
+      html += '<p class="math-note">Same ' + n + ' players need ' + singleElimRows(n) +
+        ' matches single-elim vs ' + rr.total + ' round-robin. That cost gap is the point of this comparison.</p>';
+    } else {
+      var b = bracketSize(n);
+      var byes = byeCount(n);
+      var winners = singleElimRows(n);
+      html += '<dl class="math-grid">';
+      html += row('Players', n);
+      html += row('Bracket size', b + ' (smallest power of two ≥ ' + n + ')');
+      html += row('Byes', byes + (byes ? ' — first ' + byes + ' slots walk into Round 2' : ' (clean bracket)'));
+      html += row('Rounds', roundCount(n));
+      html += row('Real Round-1 matches', realRoundOneMatches(n));
+      if (state.mode === 'single') {
+        html += row('Total match rows', winners);
+      } else {
+        var de = doubleElimShape(n);
+        html += row('Winners-bracket rows', de.winners);
+        html += row('Losers-bracket rows', de.losers);
+        html += row('Grand final + reset', 'up to 2');
+      }
+      html += '</dl>';
+      if (n === 1) {
+        html += '<p class="math-note">One player: champion by default, no matches.</p>';
+      } else if (byes > 0) {
+        html += '<p class="math-note">Match numbers are bracket addresses, not a sequence — with ' +
+          byes + ' byes the real Round-1 matches sit at the tail of the bracket.</p>';
+      }
+    }
+    explainerBodyEl.innerHTML = html;
+  }
+
+  function renderExplainer() {
+    explainerEl.textContent = EXPLAINERS[state.mode];
+    renderMath();
+  }
+
+  function setCount(n) {
+    state.n = clampCount(n);
+    resizeNames(state.n);
+    state.manualPicks = [];
+    state.results = {};
+    renderCount();
+    renderChips();
+    refreshOutputs();
+  }
+
+  rangeEl.addEventListener('input', function () { setCount(rangeEl.value); });
+  numberEl.addEventListener('change', function () { setCount(numberEl.value); });
+
+  modeCardsEl.addEventListener('click', function (event) {
+    var card = event.target.closest('.mode-card');
+    if (!card) return;
+    state.mode = card.getAttribute('data-mode');
+    state.results = {};
+    modeCardsEl.querySelectorAll('.mode-card').forEach(function (el) {
+      el.classList.toggle('active', el === card);
+    });
+    renderExplainer();
+    refreshOutputs();
+  });
+
+  // Initial paint.
+  resizeNames(state.n);
+  renderCount();
+  renderChips();
+  renderExplainer();
+  refreshOutputs();
+  narrate('Click any player name in a playable match to decide it. Locked matches wait for their feeders.');
+})();
+</script>
+</body>
+</html>
