@@ -1366,7 +1366,7 @@
     narrationEl.innerHTML = html + '<br /><button type="button" id="sim-reset">Reset simulation</button>';
     document.getElementById('sim-reset').addEventListener('click', function () {
       state.results = {}; state.rrResults = {};
-      renderBracket();
+      refreshOutputs();
       narrate('Simulation reset. Click any player name in a playable match to decide it.');
     });
   }
@@ -1385,12 +1385,12 @@
     if (mid.indexOf('RR') === 0) {
       if (state.rrResults[mid] === pid) {
         delete state.rrResults[mid];
-        renderBracket(); renderStandings();
+        refreshOutputs();
         narrate('<p>' + show(pid) + ' undecided in ' + mid + ' — standings updated.</p>');
         return;
       }
       state.rrResults[mid] = pid;
-      renderBracket(); renderStandings();
+      refreshOutputs();
       var sched = generateRoundRobin(players());
       var found = null;
       sched.rounds.forEach(function (rd) { rd.matches.forEach(function (mm) { if (mm.id === mid) found = mm; }); });
@@ -1400,12 +1400,12 @@
     }
     if (state.results[mid] === pid) {
       delete state.results[mid];
-      renderBracket();
+      refreshOutputs();
       narrate('<p>' + show(pid) + ' undecided in ' + mid + ' — downstream results that depended on it were retracted.</p>');
       return;
     }
     state.results[mid] = pid;
-    renderBracket();
+    refreshOutputs();
     var parts = mid.match(/^R(\d+)M(\d+)$/);
     if (!parts) {
       narrateDoubleSpecial(mid, pid);
