@@ -269,6 +269,22 @@
     gfReset: true
   };
 
+  // Stable internal identity: display names may duplicate or be blank, so
+  // all logic keys on ids (sports-app.txt section 127 identity principle).
+  // Engine functions take player objects {id, name}; slots/results store ids.
+  var NAME_OF = {};
+  function players() {
+    return state.names.map(function (raw, i) {
+      var name = (raw && String(raw).trim()) ? raw : ('P' + (i + 1));
+      return { id: 'p' + i, name: name };
+    });
+  }
+  function indexNames(list) {
+    NAME_OF = {};
+    list.forEach(function (p) { NAME_OF[p.id] = p.name; });
+  }
+  function disp(id) { return NAME_OF[id] || id; }
+
   var rangeEl = document.getElementById('player-count-range');
   var numberEl = document.getElementById('player-count');
   var chipsEl = document.getElementById('name-chips');
@@ -387,17 +403,18 @@
   }
 
   // Returns { byes, realMatches, rounds, byeSlots }.
-  // byeSlots: [{ slot (0-based draw position), name, next }] in draw order.
-  // opts: { method: random|balanced|seed_priority|manual, seed, manualPicks: [nameIndex] }
-  function generateSingleElim(names, opts) {
+  // byeSlots: [{ slot (0-based draw position), id, seed|null, next }] in draw order.
+  // Takes player objects {id, name}; slots store ids, never display strings.
+  // opts: { method: random|balanced|seed_priority|manual, seed, manualPicks: [playerIndex] }
+  function generateSingleElim(players, opts) {
     opts = opts || {};
     var method = opts.method || 'random';
     var seed = (opts.seed === undefined) ? DEMO_SEED : opts.seed;
-    var n = names.length;
+    var n = players.length;
     var b = bracketSize(n);
     var byes = byeCount(n);
     var slots = b / 2;
-    var idx = names.map(function (_, i) { return i; });
+    var idx = players.map(function (_, i) { return i; });
     var pool = shuffled(idx, seed);
     var notIn = function (arr, take) {
       return arr.filter(function (x) { return take.indexOf(x) === -1; });
@@ -414,9 +431,11 @@
       byeIdx = pool.slice(0, byes);
       restIdx = pool.slice(byes);
     }
-    // Which draw slots hold the byes: front (random/seed/manual) or spread.
+    // Which draw slots hold the byes. Random stacks the front (production
+    // behavior); balanced and seed priority spread across bracket positions
+    // (sections 35/37: byes distributed, top seeds prioritized for the byes).
     var byeSlotsIdx = [];
-    if (method === 'balanced') {
+    if (method === 'balanced' || method === 'seed_priority') {
       var seen = {};
       for (var e = 0; e < slots && byeSlotsIdx.length < byes; e += 2) { byeSlotsIdx.push(e); seen[e] = 1; }
       for (var o = 1; o < slots && byeSlotsIdx.length < byes; o += 2) { if (!seen[o]) byeSlotsIdx.push(o); }
@@ -425,8 +444,8 @@
       for (var s = 0; s < byes; s++) byeSlotsIdx.push(s);
     }
     var byeAtSlot = {};
-    byeSlotsIdx.forEach(function (slot, k) { if (byeIdx[k] !== undefined) byeAtSlot[slot] = names[byeIdx[k]]; });
-    // vR1[k]: { bye: name } | { match: ref }
+    byeSlotsIdx.forEach(function (slot, k) { if (byeIdx[k] !== undefined) byeAtSlot[slot] = players[byeIdx[k]].id; });
+    // vR1[k]: { bye: playerId } | { match: ref }
     var vR1 = [];
     var realMatches = [];
     var restPos = 0;
@@ -434,8 +453,8 @@
       if (byeAtSlot[i] !== undefined) {
         vR1.push({ bye: byeAtSlot[i] });
       } else {
-        var p1 = restIdx[restPos] !== undefined ? names[restIdx[restPos]] : null; restPos++;
-        var p2 = restIdx[restPos] !== undefined ? names[restIdx[restPos]] : null; restPos++;
+        var p1 = restIdx[restPos] !== undefined ? players[restIdx[restPos]].id : null; restPos++;
+        var p2 = restIdx[restPos] !== undefined ? players[restIdx[restPos]].id : null; restPos++;
         if (p1 && p2) {
           var m = { id: 'R1M' + (i + 1), round: 1, matchNo: i + 1, p1: p1, p2: p2 };
           realMatches.push(m);
@@ -465,8 +484,11 @@
       rounds.push({ roundNo: r, matches: matches });
       prev = matches.map(function () { return null; }); // deeper rounds start TBD
     }
+    // Seed rank = input position (chip 1 = seed 1); shown on the Bye Sheet.
+    var seedOf = {};
+    if (method === 'seed_priority') byeIdx.forEach(function (pi) { seedOf[players[pi].id] = pi + 1; });
     var byeSlots = Object.keys(byeAtSlot).map(Number).sort(function (a, c) { return a - c; }).map(function (slot) {
-      return { slot: slot, name: byeAtSlot[slot], next: 'R2M' + (Math.floor(slot / 2) + 1) };
+      return { slot: slot, id: byeAtSlot[slot], seed: seedOf[byeAtSlot[slot]] || null, next: 'R2M' + (Math.floor(slot / 2) + 1) };
     });
     return { byes: byes, realMatches: realMatches, rounds: rounds, byeSlots: byeSlots, vR1: vR1 };
   }
@@ -474,20 +496,21 @@
   /* ---------- Round-robin scheduler (circle method, sports-app.txt sections 40-42) ---------- */
   // Fix the first player, rotate the rest each round. Odd counts get an
   // invisible dummy — whoever meets the dummy RESTS (never a bye).
-  function generateRoundRobin(names) {
-    var n = names.length;
+  function generateRoundRobin(players) {
+    var n = players.length;
+    if (n <= 1) return { rounds: [], rests: [] };
+    var ids = players.map(function (p) { return p.id; });
     // Opening arrangement: even fields keep input order; odd fields use
     // odds-then-evens-around-dummy so the canonical 5-player draw opens
     // R1: A-B, C-D, E rests (reference section 41).
     var list;
     if (n % 2 === 0) {
-      list = names.slice();
+      list = ids.slice();
     } else {
       var odds = [], evens = [];
-      for (var k = 0; k < n; k++) { (k % 2 === 0 ? odds : evens).push(names[k]); }
+      for (var k = 0; k < n; k++) { (k % 2 === 0 ? odds : evens).push(ids[k]); }
       list = odds.concat([null], evens.reverse());
     }
-    var m = list.length;
     var m = list.length;
     var rounds = [];
     var rests = [];
@@ -512,10 +535,10 @@
   function renderRoundRobin() {
     var n = state.n;
     if (n <= 1) {
-      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — no opponents, no matches.</div>';
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(disp(players()[0].id)) + ' — no opponents, no matches.</div>';
       return;
     }
-    var t = generateRoundRobin(state.names);
+    var t = generateRoundRobin(players());
     var R = state.rrResults;
     var decidedFor = function (m) {
       return (R[m.id] === m.p1 || R[m.id] === m.p2) ? R[m.id] : null;
@@ -532,7 +555,7 @@
         html += '</div>';
       });
       var rest = t.rests.filter(function (x) { return x.round === round.roundNo; })[0];
-      if (rest) html += '<div class="match"><div class="slot"><span>' + escapeHtml(rest.player) + '</span> <span class="badge badge-rest">REST</span></div></div>';
+      if (rest) html += '<div class="match"><div class="slot"><span>' + escapeHtml(disp(rest.player)) + '</span> <span class="badge badge-rest">REST</span></div></div>';
       html += '</div>';
     });
     html += '</div>';
@@ -549,7 +572,7 @@
   var METHOD_NOTES = {
     random: 'Production behavior: byes are the first slots of a random shuffle.',
     balanced: 'Best-effort spread: byes land in different Round-2 matches so bye-winners meet as late as possible.',
-    seed_priority: 'Seeds = player order as listed (chip 1 = top seed). Top seeds take the byes.',
+    seed_priority: 'Seeds = player order as listed (chip 1 = top seed). Top seeds take the byes, spread across bracket positions.',
     manual: 'Tick exactly the required number of names — they walk into Round 2.'
   };
 
@@ -592,12 +615,12 @@
   function renderByeSheet() {
     if (state.mode === 'roundrobin') {
       if (state.n <= 1) { byeBodyEl.innerHTML = ''; return; }
-      var t = generateRoundRobin(state.names);
+      var t = generateRoundRobin(players());
       if (!t.rests.length) { byeBodyEl.innerHTML = '<p class="bye-line">Even field — every round is full, no rests.</p>'; return; }
       var html = '<p class="bye-line">Round Robin Rest Schedule — generated instead of a knockout Bye Sheet. Type: Rest Bye (odd fields only). Each player rests exactly once.</p>';
       t.rests.forEach(function (row) {
         html += '<div class="rest-line"><span class="bye-pos">Round ' + row.round + '</span>' +
-          '<span>' + escapeHtml(row.player) + ' <span class="badge badge-rest">REST</span></span>' +
+          '<span>' + escapeHtml(disp(row.player)) + ' <span class="badge badge-rest">REST</span></span>' +
           '<span class="bye-next">Rest Bye</span></div>';
       });
       byeBodyEl.innerHTML = html;
@@ -617,12 +640,13 @@
         state.manualPicks.length + ' ticked).</p>';
       return;
     }
-    var t = generateSingleElim(state.names, currentOpts());
+    var t = generateSingleElim(players(), currentOpts());
     var title = state.mode === 'double' ? 'Opening byes — winners side only' : 'Knockout byes';
     var html = '<p class="bye-line">' + title + ' · method: ' + state.byeMethod.replace('_', ' ') + '</p>';
     t.byeSlots.forEach(function (row) {
+      var seed = (row.seed !== null && row.seed !== undefined) ? ' <span class="badge badge-place">SEED ' + row.seed + '</span>' : '';
       html += '<div class="bye-row"><span class="bye-pos">Draw ' + (row.slot + 1) + '</span>' +
-        '<span>' + escapeHtml(row.name) + ' <span class="badge badge-bye">BYE</span></span>' +
+        '<span>' + escapeHtml(disp(row.id)) + ' <span class="badge badge-bye">BYE</span>' + seed + '</span>' +
         '<span class="bye-next">walks into ' + row.next + '</span></div>';
     });
     byeBodyEl.innerHTML = html;
@@ -630,13 +654,13 @@
 
   // Standings per sports-app.txt section 42: Player / Played / Wins /
   // Losses / Points. Win = 3 points (reference example: 4-4-0-12).
-  // Tie-break: head-to-head, then point difference — configurable in the
-  // real engine; noted under the table.
+  // Section 42 says tie-break rules are configurable but defines no specific
+  // rule, so the demo implements none: equal-points order is display order.
   var standingsBodyEl = document.getElementById('standings-body');
 
-  function computeStandings(names, results, schedule) {
+  function computeStandings(playerIds, results, schedule) {
     var st = {};
-    names.forEach(function (nm) { st[nm] = { name: nm, played: 0, wins: 0, losses: 0, points: 0 }; });
+    playerIds.forEach(function (id) { st[id] = { id: id, played: 0, wins: 0, losses: 0, points: 0 }; });
     schedule.rounds.forEach(function (rd) {
       rd.matches.forEach(function (m) {
         var w = results[m.id];
@@ -647,10 +671,11 @@
         st[loser].played++; st[loser].losses++;
       });
     });
-    return names.map(function (nm) { return st[nm]; }).sort(function (a, b) {
+    return playerIds.map(function (id) { return st[id]; }).sort(function (a, b) {
       if (b.points !== a.points) return b.points - a.points;
       if (b.wins !== a.wins) return b.wins - a.wins;
-      return a.name < b.name ? -1 : (a.name > b.name ? 1 : 0);
+      var an = disp(a.id), bn = disp(b.id);
+      return an < bn ? -1 : (an > bn ? 1 : 0);
     });
   }
 
@@ -660,19 +685,21 @@
       return;
     }
     if (state.n <= 1) { standingsBodyEl.innerHTML = ''; return; }
-    var rows = computeStandings(state.names, state.rrResults, generateRoundRobin(state.names));
+    var list = players();
+    var rows = computeStandings(list.map(function (p) { return p.id; }), state.rrResults, generateRoundRobin(list));
     var html = '<p class="bye-line">Standings — win = 3 pts</p>';
     html += '<table class="standings"><thead><tr><th>Player</th><th class="num">Played</th><th class="num">Wins</th><th class="num">Losses</th><th class="num">Points</th></tr></thead><tbody>';
     rows.forEach(function (r) {
-      html += '<tr><td>' + escapeHtml(r.name) + '</td><td class="num">' + r.played + '</td><td class="num">' + r.wins +
+      html += '<tr><td>' + escapeHtml(disp(r.id)) + '</td><td class="num">' + r.played + '</td><td class="num">' + r.wins +
         '</td><td class="num">' + r.losses + '</td><td class="num pts">' + r.points + '</td></tr>';
     });
     html += '</tbody></table>';
-    html += '<p class="bye-line">Tie-break: head-to-head, then point difference (configurable).</p>';
+    html += '<p class="bye-line">Tie-break rules are per-event configuration in sports-app.txt and are not modeled here — equal points show in display order.</p>';
     standingsBodyEl.innerHTML = html;
   }
 
   function refreshOutputs() {
+    indexNames(players());
     renderBracket();
     renderFairness();
     renderByeSheet();
@@ -707,18 +734,21 @@
     return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   }
 
-  // Results map: matchId -> winner name. Stale entries (winner no longer a
-  // participant after an upstream change) are dropped at resolve time, which
-  // gives us retract-on-change for free — same effect as the DB's _retract.
-  function slotHtml(name, isBye, matchId, decidedId, playable, x) {
-    if (name === 'TBD') return '<div class="slot tbd"><span>TBD</span></div>';
+  // Results map: matchId -> winner player id. Stale entries (winner no
+  // longer a participant after an upstream change) are dropped at resolve
+  // time, which gives us retract-on-change for free.
+  // slotHtml takes a player id (or 'TBD') and displays the current name,
+  // so duplicate display names stay unambiguous.
+  function slotHtml(id, isBye, matchId, decidedId, playable, x) {
+    if (id === 'TBD' || id === null || id === undefined) return '<div class="slot tbd"><span>TBD</span></div>';
+    var label = disp(id);
     var badge = isBye ? ' <span class="badge badge-bye">BYE</span>' : '';
     if (x) badge += ' <span class="badge ' + x.cls + '">' + escapeHtml(x.text) + '</span>';
-    if (!playable) return '<div class="slot"><span>' + escapeHtml(name) + '</span>' + badge + '</div>';
-    var cls = 'slot-btn' + (decidedId === name ? ' slot-winner' : (decidedId ? ' slot-loser' : ''));
-    var mark = decidedId === name ? ' ✓' : '';
-    return '<button type="button" class="' + cls + '" data-mid="' + matchId + '" data-name="' + escapeHtml(name) + '">' +
-      '<span>' + escapeHtml(name) + mark + '</span>' + badge + '</button>';
+    if (!playable) return '<div class="slot"><span>' + escapeHtml(label) + '</span>' + badge + '</div>';
+    var cls = 'slot-btn' + (decidedId === id ? ' slot-winner' : (decidedId ? ' slot-loser' : ''));
+    var mark = decidedId === id ? ' ✓' : '';
+    return '<button type="button" class="' + cls + '" data-mid="' + matchId + '" data-pid="' + escapeHtml(id) + '">' +
+      '<span>' + escapeHtml(label) + mark + '</span>' + badge + '</button>';
   }
 
   // Flatten the generated bracket into matches with feeder references,
@@ -789,8 +819,8 @@
     return d.name;
   }
 
-  function buildDoubleModel(names, opts) {
-    var t = generateSingleElim(names, opts);
+  function buildDoubleModel(plist, opts) {
+    var t = generateSingleElim(plist, opts);
     var k = t.rounds.length;
     var wRecs = resolveBracket(t);
     var wById = {};
@@ -902,13 +932,13 @@
   function renderDouble() {
     var n = state.n;
     if (n <= 1) {
-      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — champion by default, no matches.</div>';
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(disp(players()[0].id)) + ' — champion by default, no matches.</div>';
       return;
     }
-    var model = buildDoubleModel(state.names, currentOpts());
+    var model = buildDoubleModel(players(), currentOpts());
     lastDoubleModel = model;
     var html = '';
-    if (model.champion) html += '<div class="champion">Champion: ' + escapeHtml(model.champion) + '</div>';
+    if (model.champion) html += '<div class="champion">Champion: ' + escapeHtml(disp(model.champion)) + '</div>';
     html += '<p class="sim-hint">Winners-bracket losers drop down (badged → L) — they are not out. Losers-bracket losers are OUT. Click a name to decide.</p>';
     html += '<h3 class="subhead">Winners Bracket</h3><div class="bracket">';
     model.t.rounds.forEach(function (round) {
@@ -950,7 +980,7 @@
         });
         html += '</div>';
       }
-      html += '<label class="gf-opt"><input type="checkbox" id="gf-reset"' + (state.gfReset ? ' checked' : '') + ' /> Grand-final reset if the Losers champion wins</label>';
+      html += '<label class="gf-opt"><input type="checkbox" id="gf-reset"' + (state.gfReset ? ' checked' : '') + ' /> Grand-final reset if the Losers champion wins (demo assumption — sports-app.txt defines no reset rule)</label>';
       html += '</div></div>';
     }
     bracketBodyEl.innerHTML = html;
@@ -977,12 +1007,13 @@
     return null;
   }
 
-  function narrateDoubleSpecial(mid, name) {
+  function narrateDoubleSpecial(mid, pid) {
     var model = lastDoubleModel;
+    var show = function (id) { return escapeHtml(disp(id)); };
     if (mid === 'GFM1' || mid === 'GFR1') {
-      if (model && model.champion) narrate('<p>🏆 <strong>' + escapeHtml(model.champion) + '</strong> — tournament champion.</p>');
-      else if (model && model.reset && !model.reset.decided) narrate('<p><strong>' + escapeHtml(name) + '</strong> won the Grand Final from the losers side — reset match GFR1 created.</p>');
-      else narrate('<p><strong>' + escapeHtml(name) + '</strong> won ' + mid + '.</p>');
+      if (model && model.champion) narrate('<p>🏆 <strong>' + show(model.champion) + '</strong> — tournament champion.</p>');
+      else if (model && model.reset && !model.reset.decided) narrate('<p><strong>' + show(pid) + '</strong> won the Grand Final from the losers side — reset match GFR1 created.</p>');
+      else narrate('<p><strong>' + show(pid) + '</strong> won ' + mid + '.</p>');
       return;
     }
     if (model) {
@@ -991,9 +1022,9 @@
         for (var q = 0; q < lr.matches.length; q++) {
           var rec = lr.matches[q];
           if (rec.id !== mid) continue;
-          var loser = rec.slots.filter(function (s) { return s.name && s.name !== name; })[0];
-          var msg = '<p><strong>' + escapeHtml(name) + '</strong> stays alive in ' + mid +
-            (loser ? ' — ' + escapeHtml(loser.name) + ' is eliminated (second loss).</p>' : '.</p>');
+          var loser = rec.slots.filter(function (s) { return s.name && s.name !== pid; })[0];
+          var msg = '<p><strong>' + show(pid) + '</strong> stays alive in ' + mid +
+            (loser ? ' — ' + show(loser.name) + ' is eliminated (second loss).</p>' : '.</p>');
           var next = null;
           outer: for (var a = 0; a < model.L.length; a++) {
             var lr2 = model.L[a];
@@ -1005,14 +1036,14 @@
               }
             }
           }
-          if (next) msg += '<p>' + escapeHtml(name) + ' moves to ' + next + '.</p>';
-          else if (model.gf && model.gf.playable) msg += '<p>' + escapeHtml(name) + ' is the Losers champion → Grand Final vs ' + escapeHtml(model.gf.slots[0].name || 'TBD') + '.</p>';
+          if (next) msg += '<p>' + show(pid) + ' moves to ' + next + '.</p>';
+          else if (model.gf && model.gf.playable) msg += '<p>' + show(pid) + ' is the Losers champion → Grand Final vs ' + escapeHtml(model.gf.slots[0].name ? disp(model.gf.slots[0].name) : 'TBD') + '.</p>';
           narrate(msg);
           return;
         }
       }
     }
-    narrate('<p><strong>' + escapeHtml(name) + '</strong> won ' + mid + '.</p>');
+    narrate('<p><strong>' + show(pid) + '</strong> won ' + mid + '.</p>');
   }
 
   var narrationEl = document.getElementById('narration-placeholder');
@@ -1036,47 +1067,48 @@
     var btn = event.target.closest('.slot-btn');
     if (!btn || btn.classList.contains('slot-loser')) return;
     var mid = btn.getAttribute('data-mid');
-    var name = btn.getAttribute('data-name');
+    var pid = btn.getAttribute('data-pid');
+    var show = function (id) { return escapeHtml(disp(id)); };
     if (mid.indexOf('RR') === 0) {
-      if (state.rrResults[mid] === name) {
+      if (state.rrResults[mid] === pid) {
         delete state.rrResults[mid];
         renderBracket(); renderStandings();
-        narrate('<p>' + escapeHtml(name) + ' undecided in ' + mid + ' — standings updated.</p>');
+        narrate('<p>' + show(pid) + ' undecided in ' + mid + ' — standings updated.</p>');
         return;
       }
-      state.rrResults[mid] = name;
+      state.rrResults[mid] = pid;
       renderBracket(); renderStandings();
-      var sched = generateRoundRobin(state.names);
+      var sched = generateRoundRobin(players());
       var found = null;
       sched.rounds.forEach(function (rd) { rd.matches.forEach(function (mm) { if (mm.id === mid) found = mm; }); });
-      var opp = found ? (name === found.p1 ? found.p2 : found.p1) : null;
-      narrate('<p><strong>' + escapeHtml(name) + '</strong> beat ' + escapeHtml(opp || 'TBD') + ' in ' + mid + ' (+3 pts) — standings updated.</p>');
+      var opp = found ? (pid === found.p1 ? found.p2 : found.p1) : null;
+      narrate('<p><strong>' + show(pid) + '</strong> beat ' + escapeHtml(opp ? disp(opp) : 'TBD') + ' in ' + mid + ' (+3 pts) — standings updated.</p>');
       return;
     }
-    if (state.results[mid] === name) {
+    if (state.results[mid] === pid) {
       delete state.results[mid];
       renderBracket();
-      narrate('<p>' + escapeHtml(name) + ' undecided in ' + mid + ' — downstream results that depended on it were retracted.</p>');
+      narrate('<p>' + show(pid) + ' undecided in ' + mid + ' — downstream results that depended on it were retracted.</p>');
       return;
     }
-    state.results[mid] = name;
+    state.results[mid] = pid;
     renderBracket();
     var parts = mid.match(/^R(\d+)M(\d+)$/);
     if (!parts) {
-      narrateDoubleSpecial(mid, name);
+      narrateDoubleSpecial(mid, pid);
       return;
     }
     var r = parseInt(parts[1], 10), m = parseInt(parts[2], 10);
-    var t = generateSingleElim(state.names, currentOpts());
+    var t = generateSingleElim(players(), currentOpts());
     var target = describeTarget(t, r + 1, Math.ceil(m / 2));
-    var msg = '<p><strong>' + escapeHtml(name) + '</strong> won ' + mid;
+    var msg = '<p><strong>' + show(pid) + '</strong> won ' + mid;
     if (!target) {
       msg += ' — tournament champion.</p>';
     } else {
       var resolved = resolveBracket(t);
       var tgt = resolved.filter(function (x) { return x.id === target; })[0];
-      var opp = tgt.slots.filter(function (s) { return s.name && s.name !== name; })[0];
-      msg += ' → advances to ' + target + (opp ? ' vs ' + escapeHtml(opp.name) + '.' : '.') + '</p>';
+      var op2 = tgt.slots.filter(function (s) { return s.name && s.name !== pid; })[0];
+      msg += ' → advances to ' + target + (op2 ? ' vs ' + show(op2.name) + '.' : '.') + '</p>';
       if (tgt.decided || tgt.playable) {
         msg += '<p>' + target + ' is now playable.</p>';
       } else {
@@ -1086,10 +1118,10 @@
         var drop = findDropTarget(mid);
         if (drop) {
           var wrec = lastDoubleModel.wRecs.filter(function (x) { return x.id === mid; })[0];
-          var wloser = wrec ? wrec.slots.filter(function (s) { return s.name && s.name !== name; })[0] : null;
-          if (wloser) msg += '<p>' + escapeHtml(wloser.name) + ' drops to ' + drop + ' (first loss — not out).</p>';
+          var wloser = wrec ? wrec.slots.filter(function (s) { return s.name && s.name !== pid; })[0] : null;
+          if (wloser) msg += '<p>' + show(wloser.name) + ' drops to ' + drop + ' (first loss — not out).</p>';
         }
-        if (lastDoubleModel.champion) msg += '<p>Champion: <strong>' + escapeHtml(lastDoubleModel.champion) + '</strong>.</p>';
+        if (lastDoubleModel.champion) msg += '<p>Champion: <strong>' + show(lastDoubleModel.champion) + '</strong>.</p>';
       }
     }
     narrate(msg);
@@ -1107,10 +1139,10 @@
     }
     var n = state.n;
     if (n <= 1) {
-      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — champion by default, no matches.</div>';
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(disp(players()[0].id)) + ' — champion by default, no matches.</div>';
       return;
     }
-    var t = generateSingleElim(state.names, currentOpts());
+    var t = generateSingleElim(players(), currentOpts());
     var resolved = resolveBracket(t);
     var html = '<p class="sim-hint">Click a player name to decide that match. Click the winner again to undo.</p>';
     if (t.byes > 0) {
@@ -1164,15 +1196,19 @@
       html += '<dl class="math-grid">';
       html += row('Players', n);
       html += row('Bracket size', b + ' (smallest power of two ≥ ' + n + ')');
-      html += row('Byes', byes + (byes ? ' — first ' + byes + ' slots walk into Round 2' : ' (clean bracket)'));
+      var spread = state.byeMethod === 'balanced' || state.byeMethod === 'seed_priority';
+      html += row('Byes', byes + (byes ? (spread ? ' — spread across bracket positions' : ' — first ' + byes + ' slots walk into Round 2') : ' (clean bracket)'));
       html += row('Rounds', roundCount(n));
       html += row('Real Round-1 matches', realRoundOneMatches(n));
       if (state.mode === 'single') {
         html += row('Total match rows', winners);
       } else {
-        var de = doubleElimShape(n);
-        html += row('Winners-bracket rows', de.winners);
-        html += row('Losers-bracket rows', de.losers);
+        // Actual losers rows from the generated model: with byes the count
+        // is below the full-bracket B−2 (open slots never produce losers).
+        var dm = buildDoubleModel(players(), currentOpts());
+        var lrows = dm.L.reduce(function (a, lr) { return a + lr.matches.length; }, 0);
+        html += row('Winners-bracket rows', winners);
+        html += row('Losers-bracket rows', lrows);
         html += row('Grand final + reset', 'up to 2');
       }
       html += '</dl>';
