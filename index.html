@@ -104,6 +104,15 @@
   .slot.tbd { color: var(--muted); font-style: italic; }
   .badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.03em; }
   .badge-bye { background: var(--bye-soft); color: var(--bye); }
+  .badge-out { background: #fdecec; color: #b42318; }
+  .badge-place { background: #eef0f3; color: var(--muted); }
+  .badge-drop { background: var(--accent-soft); color: var(--accent); }
+  .subhead { font-size: 13px; margin: 14px 0 8px; }
+  .subhead:first-child { margin-top: 0; }
+  .champion { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
+  .feedline { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .tagline { font-size: 11px; color: var(--muted); }
+  .gf-opt { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 8px; cursor: pointer; }
   .bye-line { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
   #fairness-controls { margin-bottom: 12px; }
   #fairness-controls .field { margin-bottom: 10px; }
@@ -256,7 +265,8 @@
     seed: 7,
     manualPicks: [],
     results: {},
-    rrResults: {}
+    rrResults: {},
+    gfReset: true
   };
 
   var rangeEl = document.getElementById('player-count-range');
@@ -700,9 +710,10 @@
   // Results map: matchId -> winner name. Stale entries (winner no longer a
   // participant after an upstream change) are dropped at resolve time, which
   // gives us retract-on-change for free — same effect as the DB's _retract.
-  function slotHtml(name, isBye, matchId, decidedId, playable) {
+  function slotHtml(name, isBye, matchId, decidedId, playable, x) {
     if (name === 'TBD') return '<div class="slot tbd"><span>TBD</span></div>';
     var badge = isBye ? ' <span class="badge badge-bye">BYE</span>' : '';
+    if (x) badge += ' <span class="badge ' + x.cls + '">' + escapeHtml(x.text) + '</span>';
     if (!playable) return '<div class="slot"><span>' + escapeHtml(name) + '</span>' + badge + '</div>';
     var cls = 'slot-btn' + (decidedId === name ? ' slot-winner' : (decidedId ? ' slot-loser' : ''));
     var mark = decidedId === name ? ' ✓' : '';
@@ -758,13 +769,250 @@
       });
       var names = rec.slots.map(function (s) { return s.name; });
       rec.playable = names[0] && names[1] && !names.some(function (x) { return x === null; });
-      rec.decided = (R[rec.id] && names.indexOf(R[rec.id]) !== -1) ? R[rec.id] : null;
+      rec.decided = (rec.playable && R[rec.id] && names.indexOf(R[rec.id]) !== -1) ? R[rec.id] : null;
       rec._winner = rec.decided;
       if (!rec.playable) rec.waitingFor = rec.slots
         .filter(function (s) { return !s.name && s.feeder; })
         .map(function (s) { return s.feeder; });
     });
     return matches;
+  }
+
+  /* ----- Double elimination (sports-app.txt sections 43-45) ----- */
+  // Losers-bracket entrants are descriptors, resolved in round order:
+  // {t:'wl', id} loser of a Winners match | {t:'lw', id} winner of a Losers
+  // match | {t:'nm', name} fixed name. Odd leftovers carry forward as
+  // placements — never confused with opening byes (section 45).
+  function descLabel(d) {
+    if (d.t === 'wl') return 'loser ' + d.id;
+    if (d.t === 'lw') return 'winner ' + d.id;
+    return d.name;
+  }
+
+  function buildDoubleModel(names, opts) {
+    var t = generateSingleElim(names, opts);
+    var k = t.rounds.length;
+    var wRecs = resolveBracket(t);
+    var wById = {};
+    wRecs.forEach(function (r) { wById[r.id] = r; });
+    var wLoser = function (wid) {
+      var r = wById[wid];
+      if (!r || !r.decided) return null;
+      var o = r.slots.filter(function (s) { return s.name && s.name !== r.decided; })[0];
+      return o ? o.name : null;
+    };
+    var wRoundIds = function (r) {
+      return (t.rounds[r - 1] || { matches: [] }).matches.map(function (m) { return m.id; });
+    };
+    var L = [];
+    var lById = {};
+    var carry = [];
+    var totalL = Math.max(0, 2 * k - 2);
+    var R = state.results;
+    var resDesc = function (d) {
+      if (d.t === 'nm') return d.name;
+      if (d.t === 'wl') return wLoser(d.id);
+      if (d.t === 'lw') { var r = lById[d.id]; return r && r.decided ? r.decided : null; }
+      return null;
+    };
+    for (var j = 1; j <= totalL; j++) {
+      var pool = carry; carry = [];
+      if (j === 1) wRoundIds(1).forEach(function (id) { pool.push({ t: 'wl', id: id }); });
+      else if (j % 2 === 0) wRoundIds(j / 2 + 1).forEach(function (id) { pool.push({ t: 'wl', id: id }); });
+      var matches = [];
+      for (var q = 0; q + 1 < pool.length; q += 2) {
+        var rec = { id: 'L' + j + 'M' + (matches.length + 1), round: j, matchNo: matches.length + 1, side: 'L', slots: [{ desc: pool[q] }, { desc: pool[q + 1] }] };
+        matches.push(rec); lById[rec.id] = rec;
+      }
+      if (pool.length % 2 === 1) {
+        var left = pool[pool.length - 1];
+        left.placed = true;
+        carry.push(left);
+      }
+      matches.forEach(function (rec) { carry.push({ t: 'lw', id: rec.id }); });
+      matches.forEach(function (rec) {
+        rec.slots.forEach(function (s) { s.name = resDesc(s.desc); s.placed = !!s.desc.placed; });
+        var nms = rec.slots.map(function (s) { return s.name; });
+        rec.playable = !!(nms[0] && nms[1]);
+        rec.decided = (rec.playable && R[rec.id] && nms.indexOf(R[rec.id]) !== -1) ? R[rec.id] : null;
+        if (!rec.playable) rec.waitingFor = rec.slots.filter(function (s) { return !s.name; }).map(function (s) { return descLabel(s.desc); });
+      });
+      L.push({ no: j, matches: matches });
+    }
+    var wFinalId = k >= 1 ? 'R' + k + 'M1' : null;
+    var wChamp = (wFinalId && wById[wFinalId]) ? wById[wFinalId].decided : null;
+    var lChamp = null;
+    if (totalL > 0) {
+      var lastMatches = L[L.length - 1].matches;
+      if (lastMatches.length) lChamp = lastMatches[lastMatches.length - 1].decided;
+      else if (carry.length === 1) lChamp = resDesc(carry[0]);
+    } else if (k === 1) {
+      lChamp = wLoser(wFinalId);
+    }
+    var gf = null, reset = null, champion = null;
+    if (wChamp || lChamp) {
+      gf = { id: 'GFM1', matchNo: 1, side: 'GF', slots: [{ name: wChamp, tag: 'Winners champion' }, { name: lChamp, tag: 'Losers champion' }] };
+      gf.playable = !!(wChamp && lChamp);
+      gf.decided = (gf.playable && R.GFM1 && (R.GFM1 === wChamp || R.GFM1 === lChamp)) ? R.GFM1 : null;
+      if (gf.decided) {
+        if (gf.decided === wChamp) champion = wChamp;
+        else if (state.gfReset) {
+          reset = { id: 'GFR1', matchNo: 1, side: 'R', slots: [{ name: wChamp }, { name: lChamp }] };
+          reset.playable = true;
+          reset.decided = (R.GFR1 && (R.GFR1 === wChamp || R.GFR1 === lChamp)) ? R.GFR1 : null;
+          if (reset.decided) champion = reset.decided;
+        } else champion = gf.decided;
+      }
+    }
+    return { t: t, wRecs: wRecs, L: L, gf: gf, reset: reset, champion: champion, wRounds: k };
+  }
+
+  var lastDoubleModel = null;
+
+  function wCardHtml(rec) {
+    var cls = 'match' + (rec.decided ? ' decided' : (!rec.playable ? ' locked' : ''));
+    var html = '<div class="' + cls + '"><div class="match-id">' + rec.id + '</div>';
+    rec.slots.forEach(function (slot) {
+      var x = (rec.decided && slot.name && slot.name !== rec.decided) ? { text: '→ L', cls: 'badge-drop' } : null;
+      html += slotHtml(slot.name || 'TBD', !!slot.bye, rec.id, rec.decided, !!rec.playable, x);
+    });
+    if (!rec.playable && !rec.decided && rec.waitingFor && rec.waitingFor.length) {
+      html += '<div class="lock-note">Waiting for ' + rec.waitingFor.join(', ') + '</div>';
+    }
+    return html + '</div>';
+  }
+
+  function lCardHtml(rec) {
+    var cls = 'match' + (rec.decided ? ' decided' : (!rec.playable ? ' locked' : ''));
+    var html = '<div class="' + cls + '"><div class="match-id">' + rec.id + '</div>';
+    rec.slots.forEach(function (slot) {
+      var x = null;
+      if (slot.placed) x = { text: 'PLACEMENT', cls: 'badge-place' };
+      else if (rec.decided && slot.name && slot.name !== rec.decided) x = { text: 'OUT', cls: 'badge-out' };
+      html += slotHtml(slot.name || 'TBD', false, rec.id, rec.decided, !!rec.playable, x);
+    });
+    var feeds = rec.slots.map(function (s) { return descLabel(s.desc); }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+    html += '<div class="feedline">Draws: ' + feeds.map(escapeHtml).join(' · ') + '</div>';
+    if (!rec.playable && !rec.decided && rec.waitingFor && rec.waitingFor.length) {
+      html += '<div class="lock-note">Waiting for ' + rec.waitingFor.map(escapeHtml).join(', ') + '</div>';
+    }
+    return html + '</div>';
+  }
+
+  function renderDouble() {
+    var n = state.n;
+    if (n <= 1) {
+      bracketBodyEl.innerHTML = '<div class="placeholder">' + escapeHtml(state.names[0] || 'P1') + ' — champion by default, no matches.</div>';
+      return;
+    }
+    var model = buildDoubleModel(state.names, currentOpts());
+    lastDoubleModel = model;
+    var html = '';
+    if (model.champion) html += '<div class="champion">Champion: ' + escapeHtml(model.champion) + '</div>';
+    html += '<p class="sim-hint">Winners-bracket losers drop down (badged → L) — they are not out. Losers-bracket losers are OUT. Click a name to decide.</p>';
+    html += '<h3 class="subhead">Winners Bracket</h3><div class="bracket">';
+    model.t.rounds.forEach(function (round) {
+      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      model.wRecs.filter(function (x) { return x.round === round.roundNo; }).forEach(function (rec) {
+        html += wCardHtml(rec);
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    html += '<h3 class="subhead">Losers Bracket</h3>';
+    if (!model.L.length) {
+      html += '<p class="bye-line">Two players: the final loser feeds the Grand Final directly — no losers rounds needed.</p>';
+    } else {
+      html += '<div class="bracket">';
+      model.L.forEach(function (lr) {
+        html += '<div class="round"><h3>L' + lr.no + (lr.no === model.L.length && model.L.length > 1 ? ' · Losers final' : '') + '</h3>';
+        if (!lr.matches.length) html += '<p class="bye-line">No matches — placements carry through.</p>';
+        lr.matches.forEach(function (rec) { html += lCardHtml(rec); });
+        html += '</div>';
+      });
+      html += '</div>';
+    }
+    html += '<h3 class="subhead">Grand Final</h3>';
+    if (!model.gf) {
+      html += '<p class="bye-line">Waiting for both champions.</p>';
+    } else {
+      html += '<div class="bracket"><div class="round"><h3>Final</h3>';
+      html += '<div class="match' + (model.gf.decided ? ' decided' : (!model.gf.playable ? ' locked' : '')) + '"><div class="match-id">GFM1</div>';
+      model.gf.slots.forEach(function (slot) {
+        html += slotHtml(slot.name || 'TBD', false, 'GFM1', model.gf.decided, !!model.gf.playable, null);
+        if (slot.name) html += '<div class="tagline">' + escapeHtml(slot.tag) + '</div>';
+      });
+      html += '</div>';
+      if (model.reset) {
+        html += '<div class="match' + (model.reset.decided ? ' decided' : '') + '"><div class="match-id">GFR1 · Reset</div>';
+        model.reset.slots.forEach(function (slot) {
+          html += slotHtml(slot.name || 'TBD', false, 'GFR1', model.reset.decided, true, null);
+        });
+        html += '</div>';
+      }
+      html += '<label class="gf-opt"><input type="checkbox" id="gf-reset"' + (state.gfReset ? ' checked' : '') + ' /> Grand-final reset if the Losers champion wins</label>';
+      html += '</div></div>';
+    }
+    bracketBodyEl.innerHTML = html;
+    var gfBox = document.getElementById('gf-reset');
+    if (gfBox) gfBox.addEventListener('change', function () {
+      state.gfReset = gfBox.checked;
+      state.results = {}; state.rrResults = {};
+      refreshOutputs();
+    });
+  }
+
+  function findDropTarget(mid) {
+    if (!lastDoubleModel) return null;
+    for (var i = 0; i < lastDoubleModel.L.length; i++) {
+      var lr = lastDoubleModel.L[i];
+      for (var q = 0; q < lr.matches.length; q++) {
+        var rec = lr.matches[q];
+        for (var s = 0; s < rec.slots.length; s++) {
+          var d = rec.slots[s].desc;
+          if (d && d.t === 'wl' && d.id === mid) return rec.id;
+        }
+      }
+    }
+    return null;
+  }
+
+  function narrateDoubleSpecial(mid, name) {
+    var model = lastDoubleModel;
+    if (mid === 'GFM1' || mid === 'GFR1') {
+      if (model && model.champion) narrate('<p>🏆 <strong>' + escapeHtml(model.champion) + '</strong> — tournament champion.</p>');
+      else if (model && model.reset && !model.reset.decided) narrate('<p><strong>' + escapeHtml(name) + '</strong> won the Grand Final from the losers side — reset match GFR1 created.</p>');
+      else narrate('<p><strong>' + escapeHtml(name) + '</strong> won ' + mid + '.</p>');
+      return;
+    }
+    if (model) {
+      for (var i = 0; i < model.L.length; i++) {
+        var lr = model.L[i];
+        for (var q = 0; q < lr.matches.length; q++) {
+          var rec = lr.matches[q];
+          if (rec.id !== mid) continue;
+          var loser = rec.slots.filter(function (s) { return s.name && s.name !== name; })[0];
+          var msg = '<p><strong>' + escapeHtml(name) + '</strong> stays alive in ' + mid +
+            (loser ? ' — ' + escapeHtml(loser.name) + ' is eliminated (second loss).</p>' : '.</p>');
+          var next = null;
+          outer: for (var a = 0; a < model.L.length; a++) {
+            var lr2 = model.L[a];
+            for (var b = 0; b < lr2.matches.length; b++) {
+              var r2 = lr2.matches[b];
+              for (var c = 0; c < r2.slots.length; c++) {
+                var d = r2.slots[c].desc;
+                if (d && d.t === 'lw' && d.id === mid) { next = r2.id; break outer; }
+              }
+            }
+          }
+          if (next) msg += '<p>' + escapeHtml(name) + ' moves to ' + next + '.</p>';
+          else if (model.gf && model.gf.playable) msg += '<p>' + escapeHtml(name) + ' is the Losers champion → Grand Final vs ' + escapeHtml(model.gf.slots[0].name || 'TBD') + '.</p>';
+          narrate(msg);
+          return;
+        }
+      }
+    }
+    narrate('<p><strong>' + escapeHtml(name) + '</strong> won ' + mid + '.</p>');
   }
 
   var narrationEl = document.getElementById('narration-placeholder');
@@ -814,6 +1062,10 @@
     state.results[mid] = name;
     renderBracket();
     var parts = mid.match(/^R(\d+)M(\d+)$/);
+    if (!parts) {
+      narrateDoubleSpecial(mid, name);
+      return;
+    }
     var r = parseInt(parts[1], 10), m = parseInt(parts[2], 10);
     var t = generateSingleElim(state.names, currentOpts());
     var target = describeTarget(t, r + 1, Math.ceil(m / 2));
@@ -830,6 +1082,15 @@
       } else {
         msg += '<p>' + target + ' still waits for ' + tgt.waitingFor.join(', ') + '.</p>';
       }
+      if (state.mode === 'double' && lastDoubleModel) {
+        var drop = findDropTarget(mid);
+        if (drop) {
+          var wrec = lastDoubleModel.wRecs.filter(function (x) { return x.id === mid; })[0];
+          var wloser = wrec ? wrec.slots.filter(function (s) { return s.name && s.name !== name; })[0] : null;
+          if (wloser) msg += '<p>' + escapeHtml(wloser.name) + ' drops to ' + drop + ' (first loss — not out).</p>';
+        }
+        if (lastDoubleModel.champion) msg += '<p>Champion: <strong>' + escapeHtml(lastDoubleModel.champion) + '</strong>.</p>';
+      }
     }
     narrate(msg);
   });
@@ -840,7 +1101,8 @@
       return;
     }
     if (state.mode !== 'single') {
-      bracketBodyEl.innerHTML = '<div class="placeholder">Double-elimination rendering arrives in Step 9.</div>';
+      if (state.mode === 'double') { renderDouble(); return; }
+      bracketBodyEl.innerHTML = '<div class="placeholder">Unknown mode.</div>';
       return;
     }
     var n = state.n;
