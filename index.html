@@ -6,242 +6,442 @@
 <title>Tournament Engine Demo</title>
 <style>
   :root {
-    --bg: #f4f5f7;
-    --card: #ffffff;
-    --border: #e2e4e9;
-    --text: #1c2333;
-    --muted: #6b7280;
-    --accent: #1f6feb;
-    --accent-soft: #e8f0fe;
+    --bg: #edf0f5;
+    --surface: #ffffff;
+    --surface-2: #f5f7fa;
+    --border: #e2e7f0;
+    --border-strong: #cdd5e3;
+    --ink: #16213a;
+    --muted: #64748b;
+    --faint: #94a3b8;
+    --primary: #1f6feb;
+    --primary-soft: #e8f0fe;
+    --success: #15803d;
+    --success-soft: #e6f5ec;
+    --warning: #8a6d00;
+    --warning-soft: #fdf3d7;
     --bye: #8a6d00;
     --bye-soft: #fdf3d7;
+    --danger: #b42318;
+    --danger-soft: #fdecec;
+    --side: #0e1526;
+    --side-ink: #dbe2ef;
+    --side-muted: #8b96ad;
     --radius: 12px;
+    --radius-sm: 8px;
+    --shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 1px 3px rgba(16, 24, 40, 0.07);
+    --shadow-lg: 0 8px 24px rgba(16, 24, 40, 0.12);
   }
   * { box-sizing: border-box; }
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     background: var(--bg);
-    color: var(--text);
+    color: var(--ink);
+    font-size: 14px;
+    line-height: 1.45;
   }
-  .page { max-width: 1200px; margin: 0 auto; padding: 24px 16px 48px; }
-  header h1 { font-size: 22px; margin: 0 0 4px; }
-  header p { margin: 0 0 20px; color: var(--muted); font-size: 14px; }
+  .app { display: flex; min-height: 100vh; align-items: stretch; }
+  /* ---------- Sidebar ---------- */
+  .sidebar {
+    width: 236px; flex: 0 0 auto;
+    background: var(--side); color: var(--side-ink);
+    position: sticky; top: 0; height: 100vh;
+    display: flex; flex-direction: column;
+    padding: 18px 14px;
+  }
+  .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 16px; }
+  .brand-mark {
+    width: 34px; height: 34px; border-radius: 9px; flex: 0 0 auto;
+    background: var(--primary); color: #fff;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .brand-mark svg { width: 20px; height: 20px; }
+  .brand strong { display: block; font-size: 14px; letter-spacing: 0.01em; }
+  .brand span { display: block; font-size: 11px; color: var(--side-muted); }
+  .nav { display: flex; flex-direction: column; gap: 2px; margin-top: 4px; }
+  .nav-label { font-size: 10px; text-transform: uppercase; letter-spacing: 0.09em; color: var(--side-muted); padding: 10px 10px 4px; }
+  .nav a {
+    display: flex; align-items: center; gap: 10px;
+    color: var(--side-muted); text-decoration: none;
+    font-size: 13px; font-weight: 500;
+    padding: 8px 10px; border-radius: var(--radius-sm);
+    transition: background 120ms ease, color 120ms ease;
+  }
+  .nav a svg { width: 16px; height: 16px; flex: 0 0 auto; }
+  .nav a:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+  .nav a.active { background: rgba(255, 255, 255, 0.1); color: #fff; }
+  .side-foot { margin-top: auto; padding: 12px 10px 2px; font-size: 11px; color: var(--side-muted); border-top: 1px solid rgba(255, 255, 255, 0.08); }
+  /* ---------- Main / header ---------- */
+  .main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+  .topbar {
+    position: sticky; top: 0; z-index: 20;
+    background: rgba(255, 255, 255, 0.92);
+    border-bottom: 1px solid var(--border);
+  }
+  .topbar-in {
+    max-width: 1200px; margin: 0 auto; padding: 14px 22px;
+    display: flex; align-items: center; gap: 14px;
+  }
+  .topbar h1 { font-size: 17px; margin: 0; letter-spacing: -0.01em; }
+  .topbar p { margin: 2px 0 0; color: var(--muted); font-size: 12.5px; max-width: 640px; }
+  .top-actions { margin-left: auto; display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .pill {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    border: 1px solid var(--border-strong); border-radius: 999px; padding: 4px 11px;
+    color: var(--muted); background: var(--surface); white-space: nowrap;
+  }
+  .pill-live { border-color: var(--primary); color: var(--primary); background: var(--primary-soft); }
+  .pill-done { border-color: var(--success); color: var(--success); background: var(--success-soft); }
+  .btn {
+    font: inherit; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink);
+    border-radius: var(--radius-sm); padding: 7px 13px; cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  }
+  .btn:hover { background: var(--surface-2); box-shadow: var(--shadow); }
+  .btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .btn-primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+  .btn-primary:hover { background: #1a63d6; }
+  .content { max-width: 1200px; width: 100%; margin: 0 auto; padding: 20px 22px 72px; }
+  .sec { margin-bottom: 22px; scroll-margin-top: 84px; }
+  .sec-head { display: flex; align-items: baseline; gap: 10px; margin: 2px 2px 12px; }
+  .sec-head h2 { font-size: 14px; margin: 0; letter-spacing: 0.01em; }
+  .sec-head p { margin: 0; font-size: 12px; color: var(--muted); }
   .card {
-    background: var(--card);
+    background: var(--surface);
     border: 1px solid var(--border);
     border-radius: var(--radius);
     padding: 16px;
+    box-shadow: var(--shadow);
   }
   .controls { margin-bottom: 16px; }
-  .controls h2, .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); margin: 0 0 12px; }
+  .controls h2, .panel h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); margin: 0 0 12px; font-weight: 700; }
+  /* ---------- Dashboard grids ---------- */
+  .stats { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+  .stat { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 13px 15px; box-shadow: var(--shadow); min-width: 0; }
+  .stat .k { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 700; }
+  .stat .v { font-size: 23px; font-weight: 750; letter-spacing: -0.02em; margin-top: 3px; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .stat .s { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .setup-grid { display: grid; grid-template-columns: 1fr 1.25fr 1fr; gap: 12px; }
   .control-row { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 16px; }
   .control-row:last-child { margin-bottom: 0; }
-  .field label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 6px; }
-  .field input[type="number"] { width: 90px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
-  .field input[type="range"] { width: 200px; }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .field { min-width: 0; }
+  .field label { display: block; font-size: 11.5px; font-weight: 600; color: var(--muted); margin-bottom: 7px; text-transform: uppercase; letter-spacing: 0.04em; }
+  .field input[type="number"] { width: 92px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 14px; font: inherit; background: var(--surface); color: var(--ink); }
+  .field input[type="range"] { width: 100%; accent-color: var(--primary); }
+  .count-row { display: flex; gap: 10px; align-items: center; }
+  .count-row input[type="range"] { flex: 1 1 auto; }
+  .chips { display: flex; flex-wrap: wrap; gap: 7px; max-height: 172px; overflow-y: auto; }
   .chip {
-    border: 1px solid var(--border);
+    border: 1px solid var(--border-strong);
     border-radius: 999px;
-    padding: 6px 12px;
-    font-size: 13px;
-    background: #fafbfc;
+    padding: 6px 11px;
+    font-size: 12.5px;
+    background: var(--surface-2);
     font-family: inherit;
-    color: var(--text);
-    width: 76px;
+    color: var(--ink);
+    width: 74px;
     text-align: center;
+    transition: border-color 120ms ease, box-shadow 120ms ease;
   }
   input.chip:focus-visible {
-    outline: 2px solid var(--accent);
+    outline: 2px solid var(--primary);
     outline-offset: 1px;
-    background: var(--card);
+    background: var(--surface);
   }
-  .modes { display: flex; flex-wrap: wrap; gap: 12px; }
+  .modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
   .mode-card {
-    flex: 1 1 180px;
-    border: 1px solid var(--border);
+    border: 1.5px solid var(--border);
     border-radius: var(--radius);
-    padding: 14px;
+    padding: 13px 14px;
     cursor: pointer;
-    background: var(--card);
+    background: var(--surface);
+    transition: border-color 120ms ease, background 120ms ease, box-shadow 120ms ease;
+    position: relative;
   }
-  .mode-card.active { border-color: var(--accent); background: var(--accent-soft); }
-  .mode-card strong { display: block; font-size: 14px; margin-bottom: 4px; }
+  .mode-card:hover { border-color: var(--border-strong); box-shadow: var(--shadow); }
+  .mode-card.active { border-color: var(--primary); background: var(--primary-soft); box-shadow: var(--shadow); }
+  .mode-card:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .mode-card strong { display: block; font-size: 13.5px; margin-bottom: 3px; padding-right: 22px; }
   .mode-card span { font-size: 12px; color: var(--muted); }
+  .mode-card .tick {
+    position: absolute; top: 12px; right: 12px;
+    width: 18px; height: 18px; border-radius: 50%;
+    border: 1.5px solid var(--border-strong);
+    display: inline-flex; align-items: center; justify-content: center;
+    color: transparent; font-size: 11px; font-weight: 800;
+  }
+  .mode-card.active .tick { background: var(--primary); border-color: var(--primary); color: #fff; }
   .presets { display: flex; flex-wrap: wrap; gap: 8px; }
   .preset {
-    border: 1px solid var(--border);
-    background: var(--card);
+    border: 1px solid var(--border-strong);
+    background: var(--surface);
     border-radius: 999px;
-    padding: 8px 14px;
-    font-size: 13px;
+    padding: 7px 14px;
+    font: inherit;
+    font-size: 12.5px;
+    font-weight: 600;
+    color: var(--ink);
     cursor: pointer;
+    transition: background 120ms ease, border-color 120ms ease;
   }
-  .main { display: grid; grid-template-columns: 7fr 5fr; gap: 16px; }
+  .preset:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  .preset:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   .panel h2 { margin-bottom: 12px; }
   .placeholder {
-    border: 1px dashed var(--border);
-    border-radius: 8px;
-    padding: 24px 16px;
+    border: 1px dashed var(--border-strong);
+    border-radius: var(--radius-sm);
+    padding: 26px 16px;
     color: var(--muted);
     font-size: 13px;
     text-align: center;
     margin-bottom: 12px;
+    background: var(--surface-2);
   }
   .placeholder:last-child { margin-bottom: 0; }
-  footer { margin-top: 16px; color: var(--muted); font-size: 12px; text-align: center; }
+  footer { margin-top: 26px; color: var(--faint); font-size: 12px; text-align: center; }
   .math-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 14px; font-size: 13px; margin: 0 0 12px; }
   .math-grid dt { color: var(--muted); }
   .math-grid dd { margin: 0; font-weight: 600; }
-  .math-note { font-size: 13px; color: var(--text); background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; }
-  .bracket { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 4px; }
-  .round { min-width: 170px; flex: 1 0 0; }
-  .round h3 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
-  .match { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; margin-bottom: 8px; background: var(--card); }
-  .match-id { font-size: 11px; color: var(--muted); margin-bottom: 6px; }
-  .slot { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 3px 0; }
-  .slot.tbd { color: var(--muted); font-style: italic; }
-  .badge { font-size: 10px; font-weight: 700; border-radius: 999px; padding: 1px 7px; letter-spacing: 0.03em; }
+  .math-note { font-size: 13px; color: var(--ink); background: #fafbfc; border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 0; }
+  .bracket-scroll { overflow-x: auto; padding-bottom: 6px; }
+  .bracket { display: flex; gap: 0; min-width: min-content; }
+  .round { min-width: 208px; flex: 1 0 0; padding: 0 14px; position: relative; }
+  .round:first-child { padding-left: 0; }
+  .round + .round { border-left: 1px dashed var(--border); }
+  .round h3 {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted);
+    margin: 0 0 10px; font-weight: 700;
+    display: flex; align-items: center; gap: 7px;
+  }
+  .round h3 .rm { background: var(--surface-2); border: 1px solid var(--border); border-radius: 999px; padding: 0 8px; font-size: 10.5px; }
+  .match { border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 7px 9px; margin-bottom: 10px; background: var(--surface); box-shadow: var(--shadow); transition: border-color 120ms ease, box-shadow 120ms ease; }
+  .match:hover { border-color: var(--border-strong); }
+  .match-id { font-size: 10.5px; font-weight: 700; letter-spacing: 0.05em; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; }
+  .slot { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 2px; border-top: 1px solid var(--surface-2); }
+  .slot:first-of-type { border-top: none; }
+  .slot.tbd { color: var(--faint); font-style: italic; }
+  .badge { font-size: 9.5px; font-weight: 800; border-radius: 5px; padding: 1.5px 6px; letter-spacing: 0.05em; }
   .badge-bye { background: var(--bye-soft); color: var(--bye); }
-  .badge-out { background: #fdecec; color: #b42318; }
-  .badge-place { background: #eef0f3; color: var(--muted); }
-  .badge-drop { background: var(--accent-soft); color: var(--accent); }
-  .subhead { font-size: 13px; margin: 14px 0 8px; }
+  .badge-out { background: var(--danger-soft); color: var(--danger); }
+  .badge-place { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
+  .badge-drop { background: var(--primary-soft); color: var(--primary); }
+  .subhead { font-size: 13px; font-weight: 700; margin: 16px 0 10px; display: flex; align-items: center; gap: 8px; }
   .subhead:first-child { margin-top: 0; }
-  .champion { background: var(--accent-soft); border: 1px solid var(--accent); border-radius: 8px; padding: 10px 14px; font-size: 14px; font-weight: 700; margin-bottom: 8px; }
-  .feedline { font-size: 11px; color: var(--muted); margin-top: 4px; }
+  .subhead::after { content: ""; flex: 1 1 auto; height: 1px; background: var(--border); }
+  .champion { background: var(--success-soft); border: 1px solid var(--success); border-radius: var(--radius-sm); padding: 11px 15px; font-size: 14px; font-weight: 750; margin-bottom: 10px; color: var(--success); }
+  .feedline { font-size: 11px; color: var(--muted); margin-top: 5px; }
   .tagline { font-size: 11px; color: var(--muted); }
   .gf-opt { display: flex; gap: 8px; align-items: center; font-size: 12px; color: var(--muted); margin-top: 8px; cursor: pointer; }
-  .bye-line { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .bye-line { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
+  table.sheet { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.sheet th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--border-strong); font-weight: 700; }
+  table.sheet td { padding: 8px 10px 8px 0; border-top: 1px solid var(--border); vertical-align: middle; }
+  table.sheet tbody tr:first-child td { border-top: none; }
+  table.sheet tbody tr:hover td { background: var(--surface-2); }
+  table.sheet td.num, table.sheet th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  table.sheet td.dim { color: var(--muted); font-size: 12px; white-space: nowrap; }
   #fairness-controls { margin-bottom: 12px; }
   #fairness-controls .field { margin-bottom: 10px; }
   .seg { display: flex; flex-wrap: wrap; gap: 6px; }
-  .seg-btn { border: 1px solid var(--border); background: var(--card); border-radius: 999px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  .seg-btn.active { border-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  .seg-btn { border: 1px solid var(--border-strong); background: var(--surface); border-radius: 999px; padding: 6px 13px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; color: var(--ink); transition: all 120ms ease; }
+  .seg-btn:hover { border-color: var(--primary); }
+  .seg-btn.active { border-color: var(--primary); background: var(--primary-soft); color: var(--primary); font-weight: 700; }
+  .seg-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
   .seed-row { display: flex; gap: 8px; align-items: center; }
-  .seed-row input { width: 90px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 8px; font-size: 14px; }
-  .seed-row button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 8px 12px; font-size: 13px; cursor: pointer; }
-  #manual-picks label { display: flex; gap: 8px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; }
+  .seed-row input { width: 92px; padding: 8px 10px; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); font-size: 14px; font: inherit; background: var(--surface); color: var(--ink); }
+  .seed-row button { border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 8px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .seed-row button:hover { background: var(--surface-2); }
+  #manual-picks { display: flex; flex-wrap: wrap; gap: 2px 14px; }
+  #manual-picks label { display: flex; gap: 7px; align-items: center; font-size: 13px; padding: 3px 0; cursor: pointer; }
+  #manual-picks input { accent-color: var(--primary); }
   .bye-row { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 7px 0; border-top: 1px solid var(--border); }
   .bye-row:first-of-type { border-top: none; }
   .bye-pos { color: var(--muted); min-width: 74px; }
   .bye-next { margin-left: auto; color: var(--muted); font-size: 12px; white-space: nowrap; }
-  .match.decided { border-color: var(--accent); }
-  .match.locked { opacity: 0.75; }
-  .slot-btn { display: flex; align-items: center; gap: 6px; width: 100%; font: inherit; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 3px 4px; margin: 0 -4px; cursor: pointer; color: var(--text); }
-  .slot-btn:hover { background: var(--accent-soft); border-color: var(--accent); }
-  .slot-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  .slot-winner { background: var(--accent-soft); border-color: var(--accent); font-weight: 700; }
+  .match.decided { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .match.locked { opacity: 0.72; }
+  .slot-btn { display: flex; align-items: center; gap: 6px; width: 100%; font: inherit; text-align: left; background: none; border: 1px solid transparent; border-radius: 6px; padding: 4px 5px; margin: 0 -5px; cursor: pointer; color: var(--ink); transition: background 120ms ease, border-color 120ms ease; }
+  .slot-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
+  .slot-btn:focus-visible { outline: 2px solid var(--primary); outline-offset: 1px; }
+  .slot-winner { background: var(--primary-soft); border-color: var(--primary); font-weight: 700; }
   .slot-loser { color: var(--muted); cursor: default; }
   .slot-loser:hover { background: none; border-color: transparent; }
   .lock-note { font-size: 11px; color: var(--muted); margin-top: 4px; }
-  .sim-hint { font-size: 12px; color: var(--muted); margin: 0 0 8px; }
+  .sim-hint { font-size: 12.5px; color: var(--muted); margin: 0 0 10px; }
   .narration { font-size: 13px; }
   .narration p { margin: 0 0 8px; }
-  .narration button { border: 1px solid var(--border); background: var(--card); border-radius: 8px; padding: 6px 12px; font-size: 12px; cursor: pointer; }
-  .badge-rest { background: #eef0f3; color: var(--muted); }
-  .rest-line { display: flex; gap: 8px; align-items: baseline; font-size: 13px; padding: 7px 0; border-top: 1px solid var(--border); }
-  .rest-line:first-of-type { border-top: none; }
+  .narration button { border: 1px solid var(--border-strong); background: var(--surface); border-radius: var(--radius-sm); padding: 6px 12px; font: inherit; font-size: 12.5px; font-weight: 600; cursor: pointer; }
+  .narration button:hover { background: var(--surface-2); }
+  .badge-rest { background: var(--surface-2); color: var(--muted); border: 1px solid var(--border); }
   table.standings { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 4px; }
-  table.standings th { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); text-align: left; padding: 6px 8px 6px 0; border-bottom: 1px solid var(--border); }
-  table.standings td { padding: 7px 8px 7px 0; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.standings th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); text-align: left; padding: 7px 10px 7px 0; border-bottom: 1px solid var(--border-strong); font-weight: 700; }
+  table.standings td { padding: 8px 10px 8px 0; border-top: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+  table.standings tbody tr:first-child td { border-top: none; }
+  table.standings tbody tr:hover td { background: var(--surface-2); }
   table.standings td.num, table.standings th.num { text-align: right; }
-  table.standings td.pts { font-weight: 700; }
-  .err { font-size: 12px; color: #b42318; margin: 6px 0 0; }
+  table.standings td.pts { font-weight: 750; }
+  table.standings td.rank { color: var(--muted); font-weight: 700; width: 44px; }
+  .err { font-size: 12.5px; color: var(--danger); margin: 6px 0 0; font-weight: 600; }
+  @media (max-width: 1080px) {
+    .stats { grid-template-columns: repeat(3, 1fr); }
+    .setup-grid { grid-template-columns: 1fr 1fr; }
+  }
   @media (max-width: 900px) {
-    .main { grid-template-columns: 1fr; }
+    .app { flex-direction: column; }
+    .sidebar { width: auto; height: auto; position: static; flex-direction: row; align-items: center; padding: 10px 14px; gap: 12px; overflow-x: auto; }
+    .brand { padding: 0; }
+    .brand span, .side-foot, .nav-label { display: none; }
+    .nav { flex-direction: row; margin: 0; }
+    .nav a { white-space: nowrap; }
+    .content { padding: 14px 14px 56px; }
+    .topbar-in { padding: 12px 14px; flex-wrap: wrap; }
+  }
+  @media (max-width: 640px) {
+    .stats { grid-template-columns: repeat(2, 1fr); }
+    .setup-grid { grid-template-columns: 1fr; }
+    .modes { grid-template-columns: 1fr; }
+    .round { min-width: 188px; }
   }
 </style>
 </head>
 <body>
-<div class="page">
-
-  <header>
-    <h1>Tournament Engine Demo</h1>
-    <p id="mode-explainer">Single elimination: one loss ends the run. Bracket math and byes appear here per mode.</p>
-  </header>
-
-  <section class="card controls" aria-label="Demo controls">
-    <h2>Organizer controls</h2>
-    <div class="control-row">
-      <div class="field">
-        <label for="player-count">Players (1–20)</label>
-        <input type="range" id="player-count-range" min="1" max="20" value="5" />
-        <input type="number" id="player-count" min="1" max="20" value="5" />
-      </div>
-      <div class="field">
-        <label>Player names (click to edit)</label>
-        <div class="chips" id="name-chips"></div>
-      </div>
+<div class="app">
+  <aside class="sidebar" aria-label="Primary">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4Z"/><path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 2 4 4 4M17 6h3a1 1 0 0 1 1 1c0 2.5-2 4-4 4"/></svg></span>
+      <div><strong>TourneyDesk</strong><span>Tournament engine demo</span></div>
     </div>
-    <div class="control-row">
-      <div class="modes" id="mode-cards">
-        <div class="mode-card active" data-mode="single">
-          <strong>Single Elimination</strong>
-          <span>One loss ends the run</span>
-        </div>
-        <div class="mode-card" data-mode="double">
-          <strong>Double Elimination</strong>
-          <span>Winners + losers brackets</span>
-        </div>
-        <div class="mode-card" data-mode="roundrobin">
-          <strong>Round Robin</strong>
-          <span>Everyone plays everyone</span>
-        </div>
-      </div>
-    </div>
-    <div class="control-row">
-      <div class="presets" id="presets">
-        <button class="preset" type="button">5 players · Single</button>
-        <button class="preset" type="button">6 players · Single</button>
-        <button class="preset" type="button">5 players · Round Robin</button>
-        <button class="preset" type="button">4 players · Double</button>
-      </div>
-    </div>
-  </section>
+    <nav class="nav" aria-label="Sections">
+      <div class="nav-label">Manage</div>
+      <a href="#sec-overview" class="nav-link active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>Overview</a>
+      <a href="#sec-setup" class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 1 1-2.9 2.9l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1a2 2 0 1 1-2.9-2.9l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1a2 2 0 1 1 2.9-2.9l.1.1a1.7 1.7 0 0 0 1.9.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.9-.3l.1-.1a2 2 0 1 1 2.9 2.9l-.1.1a1.7 1.7 0 0 0-.3 1.9v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg>Setup</a>
+      <a href="#sec-bracket" class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4h6v5H4zM4 15h6v5H4zM14 9h6v6h-6z"/><path d="M10 6.5h4M10 17.5h4"/></svg>Draw &amp; Bracket</a>
+      <a href="#sec-sheets" class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg>Bye Sheet</a>
+      <a href="#sec-standings" class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Standings</a>
+      <a href="#sec-activity" class="nav-link"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 12h-4l-3 8-6-16-3 8H2"/></svg>Activity</a>
+    </nav>
+    <div class="side-foot">Static demo · engine audited<br />vs sports-app.txt</div>
+  </aside>
 
   <div class="main">
-    <section class="card panel" aria-label="Bracket">
-      <h2>Bracket / Schedule</h2>
-      <div id="bracket-body"></div>
-    </section>
-    <div>
-      <section class="card panel" style="margin-bottom: 16px;" aria-label="Bye sheet">
-        <h2>Bye Sheet / Rest &amp; Standings</h2>
-        <div id="fairness-controls">
-          <div class="field">
-            <label>Bye method</label>
-            <div class="seg" id="bye-methods">
-              <button type="button" class="seg-btn active" data-m="random">Random</button>
-              <button type="button" class="seg-btn" data-m="balanced">Balanced</button>
-              <button type="button" class="seg-btn" data-m="seed_priority">Seed priority</button>
-              <button type="button" class="seg-btn" data-m="manual">Manual</button>
-            </div>
-          </div>
-          <div class="field">
-            <label for="shuffle-seed">Shuffle seed</label>
-            <div class="seed-row">
-              <input type="number" id="shuffle-seed" value="7" />
-              <button type="button" id="reshuffle">Reshuffle</button>
-            </div>
-          </div>
-          <div id="manual-picks"></div>
-          <p class="math-note" id="method-note"></p>
+    <header class="topbar">
+      <div class="topbar-in">
+        <div>
+          <h1>Tournament Dashboard</h1>
+          <p id="mode-explainer">Single elimination: one loss ends the run. Bracket math and byes appear here per mode.</p>
         </div>
-        <div id="bye-body"></div>
-        <div id="standings-body"></div>
+        <div class="top-actions">
+          <span class="pill" id="format-badge">Single Elimination</span>
+          <span class="pill" id="status-pill">Not started</span>
+          <button type="button" class="btn" id="top-reset">Reset</button>
+        </div>
+      </div>
+    </header>
+
+    <div class="content">
+      <section class="sec" id="sec-overview" aria-label="Overview">
+        <div class="sec-head"><h2>Overview</h2><p>Live values from the current draw — nothing here is hard-coded.</p></div>
+        <div class="stats" id="overview-body"></div>
       </section>
-      <section class="card panel" aria-label="Explainer">
-        <h2>Why this bracket?</h2>
-        <div id="explainer-body"></div>
-        <div class="placeholder" id="narration-placeholder">Match narration renders here (Step 6).</div>
+
+      <section class="sec" id="sec-setup" aria-label="Tournament setup">
+        <div class="sec-head"><h2>Tournament Setup</h2><p>Participants, format, seeding and bye rules. The draw regenerates live.</p></div>
+        <div class="setup-grid">
+          <div class="card">
+            <h2>Participants</h2>
+            <div class="field">
+              <label for="player-count">Player count (1–20)</label>
+              <div class="count-row">
+                <input type="range" id="player-count-range" min="1" max="20" value="5" />
+                <input type="number" id="player-count" min="1" max="20" value="5" />
+              </div>
+            </div>
+            <div class="field" style="margin-top: 12px;">
+              <label id="names-label">Names — click a chip to edit</label>
+              <div class="chips" id="name-chips" role="group" aria-labelledby="names-label"></div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Format</h2>
+            <div class="modes" id="mode-cards">
+              <div class="mode-card active" data-mode="single" role="button" tabindex="0"><span class="tick" aria-hidden="true">✓</span><strong>Single Elimination</strong><span>One loss ends the run</span></div>
+              <div class="mode-card" data-mode="double" role="button" tabindex="0"><span class="tick" aria-hidden="true">✓</span><strong>Double Elimination</strong><span>Winners + losers brackets</span></div>
+              <div class="mode-card" data-mode="roundrobin" role="button" tabindex="0"><span class="tick" aria-hidden="true">✓</span><strong>Round Robin</strong><span>Everyone plays everyone</span></div>
+            </div>
+            <div class="field" style="margin-top: 14px;">
+              <label>Presets</label>
+              <div class="presets" id="presets">
+                <button class="preset" type="button" data-n="5" data-mode="single">5 · Single</button>
+                <button class="preset" type="button" data-n="6" data-mode="single">6 · Single</button>
+                <button class="preset" type="button" data-n="5" data-mode="roundrobin">5 · Round Robin</button>
+                <button class="preset" type="button" data-n="4" data-mode="double">4 · Double</button>
+              </div>
+            </div>
+          </div>
+          <div class="card">
+            <h2>Seeding &amp; Bye Rules</h2>
+            <div id="fairness-controls">
+              <div class="field">
+                <label>Bye method</label>
+                <div class="seg" id="bye-methods">
+                  <button type="button" class="seg-btn active" data-m="random">Random</button>
+                  <button type="button" class="seg-btn" data-m="balanced">Balanced</button>
+                  <button type="button" class="seg-btn" data-m="seed_priority">Seed priority</button>
+                  <button type="button" class="seg-btn" data-m="manual">Manual</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="shuffle-seed">Shuffle seed</label>
+                <div class="seed-row">
+                  <input type="number" id="shuffle-seed" value="7" />
+                  <button type="button" id="reshuffle">Reshuffle</button>
+                </div>
+              </div>
+              <div id="manual-picks"></div>
+              <p class="math-note" id="method-note"></p>
+            </div>
+          </div>
+        </div>
       </section>
+
+      <section class="sec" id="sec-bracket" aria-label="Draw and bracket">
+        <div class="sec-head"><h2>Draw &amp; Bracket</h2><p>Click a player to record a result. Click the winner again to undo.</p></div>
+        <div class="card panel">
+          <div id="bracket-body"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-sheets" aria-label="Bye sheet">
+        <div class="sec-head"><h2>Bye Sheet</h2><p>Knockout byes — or the Rest Schedule in Round Robin. Never mixed.</p></div>
+        <div class="card panel">
+          <div id="bye-body"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-standings" aria-label="Standings">
+        <div class="sec-head"><h2>Standings</h2><p>Round Robin table. Win = 3 pts.</p></div>
+        <div class="card panel">
+          <div id="standings-body"></div>
+        </div>
+      </section>
+
+      <section class="sec" id="sec-activity" aria-label="Activity">
+        <div class="sec-head"><h2>Draw Details &amp; Activity</h2><p>Bracket arithmetic and a narration of every decision.</p></div>
+        <div class="card panel" style="margin-bottom: 12px;">
+          <h2>Why this bracket?</h2>
+          <div id="explainer-body"></div>
+        </div>
+        <div class="card panel">
+          <h2>Activity</h2>
+          <div class="placeholder" id="narration-placeholder">Decide a match to narrate it here.</div>
+        </div>
+      </section>
+
+      <footer id="step-note">Static tournament-engine demo · logic audited against sports-app.txt · single / double / round-robin.</footer>
     </div>
   </div>
-
-  <footer id="step-note">Step 2 — inputs wired. Bracket math arrives in Step 3.</footer>
-
 </div>
 <script>
 (function () {
@@ -544,9 +744,9 @@
       return (R[m.id] === m.p1 || R[m.id] === m.p2) ? R[m.id] : null;
     };
     var html = '<p class="sim-hint">Click a name to decide that match — the standings update live. Click the winner again to undo.</p>';
-    html += '<div class="bracket">';
+    html += '<div class="bracket-scroll"><div class="bracket">';
     t.rounds.forEach(function (round) {
-      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      html += '<div class="round"><h3>Round ' + round.roundNo + ' <span class="rm">' + round.matches.length + '</span></h3>';
       round.matches.forEach(function (m) {
         var decided = decidedFor(m);
         html += '<div class="match' + (decided ? ' decided' : '') + '"><div class="match-id">' + m.id + '</div>';
@@ -558,7 +758,7 @@
       if (rest) html += '<div class="match"><div class="slot"><span>' + escapeHtml(disp(rest.player)) + '</span> <span class="badge badge-rest">REST</span></div></div>';
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
     bracketBodyEl.innerHTML = html;
   }
 
@@ -618,11 +818,13 @@
       var t = generateRoundRobin(players());
       if (!t.rests.length) { byeBodyEl.innerHTML = '<p class="bye-line">Even field — every round is full, no rests.</p>'; return; }
       var html = '<p class="bye-line">Round Robin Rest Schedule — generated instead of a knockout Bye Sheet. Type: Rest Bye (odd fields only). Each player rests exactly once.</p>';
+      html += '<table class="sheet"><thead><tr><th class="num">Round</th><th>Player</th><th>Type</th></tr></thead><tbody>';
       t.rests.forEach(function (row) {
-        html += '<div class="rest-line"><span class="bye-pos">Round ' + row.round + '</span>' +
-          '<span>' + escapeHtml(disp(row.player)) + ' <span class="badge badge-rest">REST</span></span>' +
-          '<span class="bye-next">Rest Bye</span></div>';
+        html += '<tr><td class="num">' + row.round + '</td>' +
+          '<td>' + escapeHtml(disp(row.player)) + ' <span class="badge badge-rest">REST</span></td>' +
+          '<td class="dim">Rest Bye</td></tr>';
       });
+      html += '</tbody></table>';
       byeBodyEl.innerHTML = html;
       return;
     }
@@ -643,12 +845,16 @@
     var t = generateSingleElim(players(), currentOpts());
     var title = state.mode === 'double' ? 'Opening byes — winners side only' : 'Knockout byes';
     var html = '<p class="bye-line">' + title + ' · method: ' + state.byeMethod.replace('_', ' ') + '</p>';
+      html += '<table class="sheet"><thead><tr><th class="num">Draw</th><th>Player</th><th>Type</th><th>Next match</th></tr></thead><tbody>';
     t.byeSlots.forEach(function (row) {
       var seed = (row.seed !== null && row.seed !== undefined) ? ' <span class="badge badge-place">SEED ' + row.seed + '</span>' : '';
-      html += '<div class="bye-row"><span class="bye-pos">Draw ' + (row.slot + 1) + '</span>' +
-        '<span>' + escapeHtml(disp(row.id)) + ' <span class="badge badge-bye">BYE</span>' + seed + '</span>' +
-        '<span class="bye-next">walks into ' + row.next + '</span></div>';
+      var kind = state.mode === 'double' ? 'Opening Bye' : 'Knockout Bye';
+      html += '<tr><td class="num">' + (row.slot + 1) + '</td>' +
+        '<td>' + escapeHtml(disp(row.id)) + ' <span class="badge badge-bye">BYE</span>' + seed + '</td>' +
+        '<td class="dim">' + kind + '</td>' +
+        '<td class="dim">walks into ' + row.next + '</td></tr>';
     });
+    html += '</tbody></table>';
     byeBodyEl.innerHTML = html;
   }
 
@@ -688,9 +894,11 @@
     var list = players();
     var rows = computeStandings(list.map(function (p) { return p.id; }), state.rrResults, generateRoundRobin(list));
     var html = '<p class="bye-line">Standings — win = 3 pts</p>';
-    html += '<table class="standings"><thead><tr><th>Player</th><th class="num">Played</th><th class="num">Wins</th><th class="num">Losses</th><th class="num">Points</th></tr></thead><tbody>';
-    rows.forEach(function (r) {
-      html += '<tr><td>' + escapeHtml(disp(r.id)) + '</td><td class="num">' + r.played + '</td><td class="num">' + r.wins +
+    html += '<table class="standings"><thead><tr><th class="num">Rank</th><th>Player</th><th class="num">Played</th><th class="num">Wins</th><th class="num">Losses</th><th class="num">Points</th></tr></thead><tbody>';
+    var rank = 0;
+    rows.forEach(function (r, i) {
+      if (i === 0 || r.points !== rows[i - 1].points || r.wins !== rows[i - 1].wins) rank = i + 1;
+      html += '<tr><td class="num rank">' + rank + '</td><td>' + escapeHtml(disp(r.id)) + '</td><td class="num">' + r.played + '</td><td class="num">' + r.wins +
         '</td><td class="num">' + r.losses + '</td><td class="num pts">' + r.points + '</td></tr>';
     });
     html += '</tbody></table>';
@@ -698,8 +906,113 @@
     standingsBodyEl.innerHTML = html;
   }
 
+  // Overview cards: every number below is computed from the live draw.
+  // Nothing is hard-coded.
+  var overviewBodyEl = document.getElementById('overview-body');
+  var statusPillEl = document.getElementById('status-pill');
+  var formatBadgeEl = document.getElementById('format-badge');
+
+  var FORMAT_NAMES = { single: 'Single Elimination', double: 'Double Elimination', roundrobin: 'Round Robin' };
+
+  function statCard(k, v, s) {
+    return '<div class="stat"><div class="k">' + k + '</div><div class="v">' + v + '</div><div class="s">' + s + '</div></div>';
+  }
+
+  function renderOverview() {
+    var list = players();
+    var n = state.n;
+    formatBadgeEl.textContent = FORMAT_NAMES[state.mode] || state.mode;
+    var total = 0, done = 0, stage = '—', extra = 0, extraKind = '', champion = null;
+    if (n > 1) {
+      if (state.mode === 'single') {
+        var t = generateSingleElim(list, currentOpts());
+        var resolved = resolveBracket(t);
+        total = t.rounds.reduce(function (a, x) { return a + x.matches.length; }, 0);
+        done = resolved.filter(function (x) { return x.decided; }).length;
+        extra = t.byes; extraKind = t.byes === 1 ? 'Knockout Bye' : 'Knockout Byes';
+        for (var i = 0; i < t.rounds.length; i++) {
+          var rd = t.rounds[i];
+          var open = resolved.some(function (x) { return x.round === rd.roundNo && x.playable && !x.decided; });
+          if (open) { stage = 'Round ' + rd.roundNo + ' of ' + t.rounds.length; break; }
+        }
+        if (done === total && total > 0) {
+          stage = 'Complete';
+          var fin = resolved.filter(function (x) { return x.round === t.rounds.length; })[0];
+          champion = fin ? fin.decided : null;
+        }
+      } else if (state.mode === 'double') {
+        var model = buildDoubleModel(list, currentOpts());
+        var wDone = model.wRecs.filter(function (x) { return x.decided; }).length;
+        var lDone = 0, lTotal = 0;
+        model.L.forEach(function (lr) {
+          lTotal += lr.matches.length;
+          lDone += lr.matches.filter(function (x) { return x.decided; }).length;
+        });
+        total = model.t.rounds.reduce(function (a, x) { return a + x.matches.length; }, 0) + lTotal +
+          (model.gf ? 1 : 0) + (model.reset ? 1 : 0);
+        done = wDone + lDone + (model.gf && model.gf.decided ? 1 : 0) + (model.reset && model.reset.decided ? 1 : 0);
+        extra = model.t.byes; extraKind = model.t.byes === 1 ? 'Opening Bye' : 'Opening Byes';
+        champion = model.champion;
+        if (champion) stage = 'Complete';
+        else if (model.gf && model.gf.playable) stage = 'Grand Final';
+        else {
+          var lw = model.wRecs.some(function (x) { return x.playable && !x.decided; });
+          var fw = null;
+          for (var q = 0; q < model.t.rounds.length; q++) {
+            var rr2 = model.t.rounds[q];
+            if (model.wRecs.some(function (x) { return x.round === rr2.roundNo && x.playable && !x.decided; })) { fw = rr2.roundNo; break; }
+          }
+          if (fw !== null) stage = 'Winners · Round ' + fw;
+          else {
+            var fl = null;
+            for (var a = 0; a < model.L.length; a++) {
+              if (model.L[a].matches.some(function (x) { return x.playable && !x.decided; })) { fl = model.L[a].no; break; }
+            }
+            stage = fl !== null ? 'Losers · L' + fl : 'Losers bracket';
+          }
+          if (!lw && fl === null && !(model.gf && model.gf.playable)) stage = 'Losers bracket';
+        }
+      } else {
+        var sched = generateRoundRobin(list);
+        total = sched.rounds.reduce(function (a, x) { return a + x.matches.length; }, 0);
+        var R = state.rrResults;
+        done = 0;
+        sched.rounds.forEach(function (rd) {
+          rd.matches.forEach(function (mm) { if (R[mm.id] === mm.p1 || R[mm.id] === mm.p2) done++; });
+        });
+        extra = sched.rests.length; extraKind = 'Rest Byes';
+        if (done === total && total > 0) stage = 'Complete';
+        else {
+          for (var s = 0; s < sched.rounds.length; s++) {
+            var rd2 = sched.rounds[s];
+            if (rd2.matches.some(function (mm) { return !(R[mm.id] === mm.p1 || R[mm.id] === mm.p2); })) { stage = 'Round ' + rd2.roundNo + ' of ' + sched.rounds.length; break; }
+          }
+        }
+        var rows = computeStandings(list.map(function (p) { return p.id; }), state.rrResults, sched);
+        var lead = rows.filter(function (r) { return r.played > 0; })[0];
+        champion = lead ? disp(lead.id) + ' leads' : null;
+      }
+    }
+    var status, pillCls = 'pill';
+    if (total === 0) { status = n <= 1 ? 'No draw' : 'Not started'; }
+    else if (champion && (state.mode !== 'roundrobin')) { status = 'Complete'; pillCls += ' pill-done'; }
+    else if (done === total) { status = 'Complete'; pillCls += ' pill-done'; }
+    else if (done > 0) { status = 'In progress'; pillCls += ' pill-live'; }
+    else { status = 'Not started'; }
+    statusPillEl.textContent = status;
+    statusPillEl.className = pillCls;
+    var html = '';
+    html += statCard('Participants', n, state.mode === 'double' ? 'Winners + losers' : (FORMAT_NAMES[state.mode] || ''));
+    html += statCard('Matches', done + ' / ' + total, (total - done) + ' remaining');
+    html += statCard('Current stage', stage, done === 0 && total > 0 ? 'nothing decided yet' : 'of this draw');
+    html += statCard(extraKind || 'Byes', extra, state.mode === 'roundrobin' ? 'each rests once' : 'per bye sheet');
+    html += statCard('Standing', champion ? escapeHtml(champion) : '—', state.mode === 'roundrobin' ? 'points leader' : (champion ? 'tournament champion' : 'no champion yet'));
+    overviewBodyEl.innerHTML = html;
+  }
+
   function refreshOutputs() {
     indexNames(players());
+    renderOverview();
     renderBracket();
     renderFairness();
     renderByeSheet();
@@ -940,33 +1253,33 @@
     var html = '';
     if (model.champion) html += '<div class="champion">Champion: ' + escapeHtml(disp(model.champion)) + '</div>';
     html += '<p class="sim-hint">Winners-bracket losers drop down (badged → L) — they are not out. Losers-bracket losers are OUT. Click a name to decide.</p>';
-    html += '<h3 class="subhead">Winners Bracket</h3><div class="bracket">';
+    html += '<h3 class="subhead">Winners Bracket</h3><div class="bracket-scroll"><div class="bracket">';
     model.t.rounds.forEach(function (round) {
-      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      html += '<div class="round"><h3>Round ' + round.roundNo + ' <span class="rm">' + round.matches.length + '</span></h3>';
       model.wRecs.filter(function (x) { return x.round === round.roundNo; }).forEach(function (rec) {
         html += wCardHtml(rec);
       });
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
     html += '<h3 class="subhead">Losers Bracket</h3>';
     if (!model.L.length) {
       html += '<p class="bye-line">Two players: the final loser feeds the Grand Final directly — no losers rounds needed.</p>';
     } else {
-      html += '<div class="bracket">';
+      html += '<div class="bracket-scroll"><div class="bracket">';
       model.L.forEach(function (lr) {
-        html += '<div class="round"><h3>L' + lr.no + (lr.no === model.L.length && model.L.length > 1 ? ' · Losers final' : '') + '</h3>';
+        html += '<div class="round"><h3>L' + lr.no + (lr.no === model.L.length && model.L.length > 1 ? ' · Losers final' : '') + ' <span class="rm">' + lr.matches.length + '</span></h3>';
         if (!lr.matches.length) html += '<p class="bye-line">No matches — placements carry through.</p>';
         lr.matches.forEach(function (rec) { html += lCardHtml(rec); });
         html += '</div>';
       });
-      html += '</div>';
+      html += '</div></div>';
     }
     html += '<h3 class="subhead">Grand Final</h3>';
     if (!model.gf) {
       html += '<p class="bye-line">Waiting for both champions.</p>';
     } else {
-      html += '<div class="bracket"><div class="round"><h3>Final</h3>';
+      html += '<div class="bracket-scroll"><div class="bracket"><div class="round"><h3>Final</h3>';
       html += '<div class="match' + (model.gf.decided ? ' decided' : (!model.gf.playable ? ' locked' : '')) + '"><div class="match-id">GFM1</div>';
       model.gf.slots.forEach(function (slot) {
         html += slotHtml(slot.name || 'TBD', false, 'GFM1', model.gf.decided, !!model.gf.playable, null);
@@ -981,7 +1294,7 @@
         html += '</div>';
       }
       html += '<label class="gf-opt"><input type="checkbox" id="gf-reset"' + (state.gfReset ? ' checked' : '') + ' /> Grand-final reset if the Losers champion wins (demo assumption — sports-app.txt defines no reset rule)</label>';
-      html += '</div></div>';
+      html += '</div></div></div>';
     }
     bracketBodyEl.innerHTML = html;
     var gfBox = document.getElementById('gf-reset');
@@ -1149,9 +1462,9 @@
       html += '<p class="bye-line">' + t.byes + ' bye' + (t.byes > 1 ? 's' : '') +
         ' walk directly into Round 2 — see the Bye Sheet.</p>';
     }
-    html += '<div class="bracket">';
+    html += '<div class="bracket-scroll"><div class="bracket">';
     t.rounds.forEach(function (round) {
-      html += '<div class="round"><h3>Round ' + round.roundNo + '</h3>';
+      html += '<div class="round"><h3>Round ' + round.roundNo + ' <span class="rm">' + round.matches.length + '</span></h3>';
       resolved.filter(function (x) { return x.round === round.roundNo; }).forEach(function (rec) {
         var cls = 'match' + (rec.decided ? ' decided' : (!rec.playable ? ' locked' : ''));
         html += '<div class="' + cls + '"><div class="match-id">' + rec.id + '</div>';
@@ -1165,7 +1478,7 @@
       });
       html += '</div>';
     });
-    html += '</div>';
+    html += '</div></div>';
     bracketBodyEl.innerHTML = html;
   }
 
@@ -1243,14 +1556,59 @@
   modeCardsEl.addEventListener('click', function (event) {
     var card = event.target.closest('.mode-card');
     if (!card) return;
-    state.mode = card.getAttribute('data-mode');
+    applyMode(card.getAttribute('data-mode'));
+  });
+  modeCardsEl.addEventListener('keydown', function (event) {
+    if (event.key !== 'Enter' && event.key !== ' ') return;
+    var card = event.target.closest('.mode-card');
+    if (!card) return;
+    event.preventDefault();
+    applyMode(card.getAttribute('data-mode'));
+  });
+
+  function applyMode(mode) {
+    state.mode = mode;
     state.results = {}; state.rrResults = {};
     modeCardsEl.querySelectorAll('.mode-card').forEach(function (el) {
-      el.classList.toggle('active', el === card);
+      el.classList.toggle('active', el.getAttribute('data-mode') === mode);
     });
     renderExplainer();
     refreshOutputs();
+  }
+
+  document.getElementById('presets').addEventListener('click', function (event) {
+    var btn = event.target.closest('.preset');
+    if (!btn) return;
+    state.results = {}; state.rrResults = {}; state.manualPicks = [];
+    applyMode(btn.getAttribute('data-mode'));
+    setCount(parseInt(btn.getAttribute('data-n'), 10));
   });
+
+  document.getElementById('top-reset').addEventListener('click', function () {
+    state.results = {}; state.rrResults = {};
+    renderBracket(); renderStandings(); renderOverview();
+    narrate('Simulation reset. Click any player name in a playable match to decide it.');
+  });
+
+  // Sidebar scroll-spy: highlight the section in view.
+  (function spy() {
+    var links = Array.prototype.slice.call(document.querySelectorAll('.nav-link'));
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    if (!('IntersectionObserver' in window)) return;
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        links.forEach(function (a) { a.classList.remove('active'); });
+        var a = map[e.target.id];
+        if (a) a.classList.add('active');
+      });
+    }, { rootMargin: '-40% 0px -55% 0px' });
+    Object.keys(map).forEach(function (id) {
+      var s = document.getElementById(id);
+      if (s) obs.observe(s);
+    });
+  })();
 
   // Initial paint.
   resizeNames(state.n);
